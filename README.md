@@ -103,7 +103,7 @@ Open http://localhost:5173, sign up, create a canvas, and invite a second user b
 | Invite by username or email | `POST /api/canvases/{id}/members` (idempotent) |
 | Rectangle, ellipse, line, text | `client/src/canvas/shapes.tsx` |
 | Select, move, resize, delete, change color | `client/src/canvas/Board.tsx` |
-| Undo / redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z) | `client/src/undo.ts` |
+| Undo / redo (toolbar buttons) | `client/src/undo.ts` |
 | Other users' cursors, with names | `client/src/Cursors.tsx` |
 | Persistence across sessions | Postgres; every edit is committed before it's broadcast |
 

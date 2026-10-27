@@ -2,7 +2,7 @@
 // actions; undo and redo send an ordinary op, so it goes through server
 // validation, the canvas lock and the version filter like any other edit (U1).
 // LIMITATION: history is in memory only -> lost on refresh (U7); fix: keep each user's op log server-side.
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ClientMessage, ShapePatch } from "./types";
 
 // One entry per user action, so a whole drag or resize is a single undo step (U5).
@@ -42,14 +42,25 @@ function redoOp(e: UndoEntry): ShapeOp {
 }
 
 export function useUndo(send: (op: ClientMessage) => boolean, isLive: (id: string) => boolean) {
-  // Refs, not state: nothing renders the stacks, so changing them needn't re-render.
+  // The stacks are refs so step() always sees the latest entries; only whether each
+  // is empty is state, because that's all the toolbar buttons render.
   const undoStack = useRef<UndoEntry[]>([]);
   const redoStack = useRef<UndoEntry[]>([]);
-
-  const record = useCallback((e: UndoEntry) => {
-    undoStack.current.push(e);
-    redoStack.current = []; // Edge case: U6 a new action makes the old redo branch meaningless.
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const sync = useCallback(() => {
+    setCanUndo(undoStack.current.length > 0);
+    setCanRedo(redoStack.current.length > 0);
   }, []);
+
+  const record = useCallback(
+    (e: UndoEntry) => {
+      undoStack.current.push(e);
+      redoStack.current = []; // Edge case: U6 a new action makes the old redo branch meaningless.
+      sync();
+    },
+    [sync],
+  );
 
   // Pop entries until one still makes sense, send it, and move it to the other stack.
   const step = useCallback(
@@ -73,8 +84,13 @@ export function useUndo(send: (op: ClientMessage) => boolean, isLive: (id: strin
     [send, isLive],
   );
 
-  const undo = useCallback(() => step(undoStack.current, redoStack.current, undoOp), [step]);
-  const redo = useCallback(() => step(redoStack.current, undoStack.current, redoOp), [step]);
-  // One stable object, so CanvasPage's keydown effect (deps: [history]) isn't re-added every render.
-  return useMemo(() => ({ record, undo, redo }), [record, undo, redo]);
+  const undo = useCallback(() => {
+    step(undoStack.current, redoStack.current, undoOp);
+    sync();
+  }, [step, sync]);
+  const redo = useCallback(() => {
+    step(redoStack.current, undoStack.current, redoOp);
+    sync();
+  }, [step, sync]);
+  return useMemo(() => ({ record, undo, redo, canUndo, canRedo }), [record, undo, redo, canUndo, canRedo]);
 }

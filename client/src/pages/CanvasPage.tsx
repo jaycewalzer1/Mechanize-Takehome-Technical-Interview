@@ -146,21 +146,6 @@ function CanvasEditor({ canvasId }: { canvasId: string }) {
     return () => clearTimeout(t);
   }, [error, setError]);
 
-  // Listening on window so the shortcuts work wherever focus is on the page.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
-      const t = e.target as HTMLElement;
-      // Edge case: R7 in a text field, Ctrl/Cmd+Z belongs to the field (the invite box, a text shape's editor).
-      if (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
-      e.preventDefault();
-      if (e.shiftKey) history.redo();
-      else history.undo();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [history]);
-
   if (rejected) return <p className="error">Can't open this canvas: {rejected}</p>;
 
   return (
@@ -185,7 +170,13 @@ function CanvasEditor({ canvasId }: { canvasId: string }) {
         // hides it without a new message type; the next move brings it back.
         onPointerLeave={() => sendCursor(-100, -100)}
       >
-        <Board shapes={socket.shapes} onOp={onOp} onGesture={onGesture} disabled={socket.status !== "open"} />
+        <Board
+          shapes={socket.shapes}
+          onOp={onOp}
+          onGesture={onGesture}
+          history={history}
+          disabled={socket.status !== "open"}
+        />
         <Cursors subscribe={socket.subscribePeers} />
       </div>
     </>

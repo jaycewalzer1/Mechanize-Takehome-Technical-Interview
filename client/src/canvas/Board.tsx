@@ -25,6 +25,8 @@ type Props = {
   shapes: Shape[];
   onOp: (op: ClientMessage) => void;
   onGesture: (entry: { id: string; before: ShapePatch; after: ShapePatch }) => void;
+  // Undo/redo live in the parent's history; the Board only shows the toolbar buttons.
+  history: { undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean };
   disabled: boolean;
 };
 
@@ -51,7 +53,7 @@ const SEND_INTERVAL_MS = 50; // ~20 updates/s during a drag (W11): smooth for pe
 const MIN_DRAW = 2; // V5: anything smaller is an accidental click, not a shape
 const TEXT_HEIGHT = 28;
 
-export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
+export default function Board({ shapes, onOp, onGesture, history, disabled }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [color, setColor] = useState(COLORS[0]);
@@ -316,6 +318,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
           onOp({ type: "delete", id: selected.id });
           setSelectedId(null);
         }}
+        history={history}
         disabled={disabled}
       />
       <div style={{ position: "relative" }}>

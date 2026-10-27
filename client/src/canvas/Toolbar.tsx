@@ -1,4 +1,4 @@
-// Tool, color and delete controls. Purely presentational; the Board owns the state.
+// Tool, color, delete and undo/redo controls. Purely presentational; the Board owns the state.
 
 export type Tool = "select" | "rect" | "ellipse" | "line" | "text";
 
@@ -18,6 +18,7 @@ export default function Toolbar(props: {
   onColor: (c: string) => void;
   canDelete: boolean;
   onDelete: () => void;
+  history: { undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean };
   disabled: boolean;
 }) {
   return (
@@ -52,6 +53,13 @@ export default function Toolbar(props: {
       <span style={{ width: 12 }} />
       <button disabled={props.disabled || !props.canDelete} onClick={props.onDelete}>
         delete
+      </button>
+      <span style={{ width: 12 }} />
+      <button disabled={props.disabled || !props.history.canUndo} onClick={props.history.undo}>
+        undo
+      </button>
+      <button disabled={props.disabled || !props.history.canRedo} onClick={props.history.redo}>
+        redo
       </button>
     </div>
   );

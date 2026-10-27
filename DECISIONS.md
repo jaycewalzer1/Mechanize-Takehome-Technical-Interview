@@ -62,3 +62,13 @@ Decision: no tests for auth, canvas CRUD, or invites; those are verified by hand
 Alternative: a broad suite. An earlier 37-test version, mutation-checked against 8 injected bugs, was removed (see git history, commit 5ded18a).
 Why: in a 3-hour block, tests pay off only where bugs are race-dependent and invisible in a two-browser check.
 Weakness: auth and membership regressions are caught only by manual re-checks.
+
+### WebSocket protocol and conflict policy (PLAN.md)
+Decision: one canvas-wide `seq`, bumped under the canvas row lock for every shape op and stored as the shape's `version`. Clients ignore `shape` frames with version <= what they hold. Updates are field-level patches, last writer wins. Ops on a deleted shape are rejected; only an explicit `restore` un-deletes. Every connect gets a full snapshot.
+Alternative: a per-canvas `asyncio.Lock` held across write + broadcast; CRDT/OT.
+Why: several people edit the same shapes at once (README). The row lock serializes writes in the DB and the version filter makes every client converge on the DB state, even if broadcasts arrive out of order. Patches let a concurrent move and recolor both survive.
+Weakness: every op on a canvas is serialized (fine for 2-5 users at ~20 updates/s each); the in-memory room registry assumes a single server process.
+
+### Few committed tests
+Decision: tests are written freely during development, but only the risky concurrency/realtime paths (C1, C2/C6, C3, W1, W2) are committed. Everything else is verified by hand and noted here.
+Why: the 3-hour limit, and every committed line has to be explained in review.

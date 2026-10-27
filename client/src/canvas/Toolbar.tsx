@@ -19,13 +19,13 @@ export default function Toolbar(props: {
   disabled: boolean;
 }) {
   return (
-    <div className="row">
+    <div className="row toolbar">
       {TOOLS.map((t) => (
         <button
           key={t}
+          className={props.tool === t ? "tool active" : "tool"}
           disabled={props.disabled}
           onClick={() => props.onTool(t)}
-          style={{ fontWeight: props.tool === t ? 700 : 400, borderColor: props.tool === t ? "#2563eb" : undefined }}
         >
           {t}
         </button>
@@ -42,7 +42,7 @@ export default function Toolbar(props: {
             height: 26,
             padding: 0,
             background: c,
-            outline: props.color === c ? "2px solid #2563eb" : undefined,
+            outline: props.color === c ? "2px solid var(--accent)" : undefined,
             outlineOffset: 2,
           }}
         />

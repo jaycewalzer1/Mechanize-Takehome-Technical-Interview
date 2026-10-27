@@ -1,14 +1,104 @@
+/* Global styles: the "Drafting Table" theme (light paper, dark blueprint) plus
+   the few layout helpers the pages share. Components use these classes and
+   variables instead of hardcoded colors, so the theme is changed here only. */
+
+/* ---- Theme tokens ---------------------------------------------------------- */
+:root {
+  --bg: #FAF8F3;      /* paper: page and board background */
+  --grid: #DCE4EE;    /* faint blue grid lines on the board */
+  --ink: #2B2B2B;     /* default text */
+  --muted: #6B6B6B;   /* secondary text */
+  --border: #E4E0D6;  /* panel, toolbar and input edges */
+  --panel: #FFFFFF;   /* toolbar and button background */
+  --accent: #2F5D8A;  /* active tool, selection, links, focus ring */
+  --danger: #B3261E;  /* error text; a token so it stays readable in dark mode */
+}
+
+/* Dark mode follows the OS setting: a blueprint look with the same token names,
+   so no component needs to know which mode is active. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12304F;
+    --grid: rgba(255, 255, 255, 0.08);
+    --ink: #EAF1F8;
+    --muted: #9FB3C8;
+    --border: rgba(255, 255, 255, 0.15);
+    --panel: #173A5E;
+    --accent: #8FC1FF;
+    --danger: #FF8A80;
+  }
+}
+
+/* ---- Base elements --------------------------------------------------------- */
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, sans-serif; color: #222; background: #fafafa; }
-a { color: #2563eb; }
-input, button { font: inherit; padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; }
-button { background: #fff; cursor: pointer; }
-button:hover { background: #f0f0f0; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+a { color: var(--accent); }
+input, button {
+  font: inherit;
+  color: var(--ink);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The one animation the theme allows: a 150ms hover fade. */
+button { cursor: pointer; transition: background-color 150ms, border-color 150ms; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- Layout helpers -------------------------------------------------------- */
 .page { padding: 16px 24px; max-width: 1100px; margin: 0 auto; }
 .page.narrow { max-width: 360px; margin-top: 10vh; }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .spacer { flex: 1; }
-.error { color: #b91c1c; }
-.muted { color: #777; font-size: 0.9em; }
+.error { color: var(--danger); }
+.muted { color: var(--muted); font-size: 0.9em; }
 .list { padding-left: 18px; line-height: 1.8; }
+
+/* ---- Editor chrome --------------------------------------------------------- */
+.toolbar {
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+/* The selected tool: accent border and text, so it reads in both modes. */
+.tool.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+/* The board <svg>: paper with a 24px grid, drawn by two 1px gradients (one
+   vertical line, one horizontal line per tile). Shapes draw on top of it. */
+.board {
+  display: block;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Selection outline and resize handles (SVG elements, so fill/stroke, not background). */
+.selection-outline { fill: none; stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
+.handle { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; cursor: pointer; }
+
+/* ---- Remote cursors -------------------------------------------------------- */
+/* Arrow plus a name pill to its lower right. Never catches the pointer, so the
+   board underneath still gets every event. The user's color is set inline. */
+.remote-cursor { position: absolute; display: flex; align-items: flex-start; pointer-events: none; }
+.cursor-pill {
+  margin-top: 14px;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}

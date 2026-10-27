@@ -130,3 +130,9 @@ Why: in a fast design review, accidental clicks are common; silently dropping th
 Not changed: the brief snap-back after a drag ends (echoes of in-flight drag frames,
 at most one round trip, invisible on localhost) would need per-shape tracking of
 unconfirmed ops in the sync core. LIMITATION.
+
+### "Drafting Table" theme via CSS variables
+Decision: all UI colors are CSS variables in `client/src/styles.css` (light paper, dark blueprint via `prefers-color-scheme`); the board gets a 24px grid; remote cursor colors come from `userColor.ts` (user id hashed into a fixed 6-color list).
+Alternative: inline styles per component (what we had), or a CSS-in-JS/theme library.
+Why: one place to change the theme, no dependency, and no state/sync code touched.
+Weakness: shape colors are stored data from a fixed palette, so the default near-black shape is low contrast on the dark blueprint background.

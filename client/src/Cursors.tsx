@@ -4,18 +4,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMessage, Peer } from "./types";
 import type { PeerEvent } from "./useCanvasSocket";
+import { userColor } from "./userColor";
 
 const SEND_INTERVAL_MS = 40; // ~25/s (W10): smooth enough to follow, cheap for 5 users
 
 type Remote = Peer & { x: number; y: number };
-
-// Derived from user_id, so one person has the same color in every client and
-// every session with no server state.
-function colorFor(userId: string): string {
-  let hue = 0;
-  for (const ch of userId) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
-  return `hsl(${hue} 70% 45%)`;
-}
 
 export default function Cursors({ subscribe }: { subscribe: (fn: (e: PeerEvent) => void) => () => void }) {
   const [cursors, setCursors] = useState<Record<string, Remote>>({});
@@ -45,13 +38,13 @@ export default function Cursors({ subscribe }: { subscribe: (fn: (e: PeerEvent) 
     // Covers the board without catching clicks, so the Board underneath still gets every pointer event.
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
       {Object.values(cursors).map((c) => {
-        const color = colorFor(c.user_id);
+        const color = userColor(c.user_id);
         return (
-          <div key={c.conn_id} style={{ position: "absolute", transform: `translate(${c.x}px, ${c.y}px)` }}>
+          <div key={c.conn_id} className="remote-cursor" style={{ transform: `translate(${c.x}px, ${c.y}px)` }}>
             <svg width="14" height="18" viewBox="0 0 14 18" style={{ display: "block" }}>
               <path d="M0 0 L0 14 L4 10.5 L7 17 L9.5 16 L6.5 9.5 L12 9.5 Z" fill={color} stroke="#fff" />
             </svg>
-            <span style={{ background: color, color: "#fff", fontSize: 12, padding: "1px 4px", borderRadius: 3 }}>
+            <span className="cursor-pill" style={{ background: color }}>
               {c.username}
             </span>
           </div>

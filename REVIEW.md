@@ -4,7 +4,7 @@ Ordered by severity. **FIXED** = changed in this review's commit; **OPEN** = sti
 
 ## High
 
-1. **FIXED** `server/tests/test_ws.py:113` (C2): Alice's `create` and Bob's first `update` raced. If Bob's update was handled before the create committed, it got "Shape not found" with no `shape` frame, and the test waited forever for its 61st frame. It hung in about 1 of 10 runs, and Track A hit the same hang. Fix: wait for both clients to see the create echo before the concurrent updates (25/25 runs pass).
+1. **FIXED** `server/tests/test_ws.py:113` (C2): Alice's `create` and Bob's first `update` raced. If Bob's update was handled before the create committed, it got "Shape not found" with no `shape` frame, and the test waited forever for its 61st frame. It hung in 1 of 10 runs in this review (other batches of 10 all passed, so it's timing-dependent). Fix: wait for both clients to see the create echo before the concurrent updates (25/25 runs pass).
 2. **FIXED** `server/app/ws.py:81`: a dropped connection's cleanup ran `rooms.pop(canvas_id)` by key. Two sockets dropped by `_deliver`, then a new joiner, then the second cleanup would pop the *new* room, so the joiner stops receiving every broadcast and its users silently diverge. Fix: pop only if `rooms.get(canvas_id) is room`.
 3. **FIXED** `server/app/ws.py:143` (W3): only `PostgresError` was caught. `asyncpg.InterfaceError` and `OSError` (the pool reconnecting while Postgres restarts) escaped and killed the receive loop. Fix: catch `(PostgresError, InterfaceError, OSError)`. Verified with a throwaway test that raises `ConnectionRefusedError`: the old code drops the socket, the new code sends an error frame and keeps it open.
 

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ClientMessage, ServerMessage, Shape, ShapeProps } from "./types";
 
-export type Status = "connecting" | "open" | "reconnecting";
+type Status = "connecting" | "open" | "reconnecting";
 // "reset" is local: a fresh snapshot means any cursor we hold may belong to a
 // connection whose `leave` we missed while disconnected.
 export type PeerEvent = Extract<ServerMessage, { type: "cursor" } | { type: "leave" }> | { type: "reset" };
@@ -31,7 +31,7 @@ function applyFrame(state: State, f: ShapeFrame): State {
 // Optimistic apply (PLAN client rules): props change now, `version` doesn't,
 // so the server's echo (always a higher version) still passes the filter and
 // replaces this with the committed state.
-// Edge case: W6 a rejected op is undone by reconnecting on `error` (see onmessage), not here.
+// Edge case: W3 a rejected op is undone by reconnecting on `error` (see onmessage), not here.
 function applyLocal(state: State, op: Exclude<ClientMessage, { type: "cursor" }>): State {
   const held = state.byId[op.id];
   let next: Held;
@@ -66,7 +66,8 @@ export function useCanvasSocket(canvasId: string) {
   // snapshot would apply to state the snapshot is about to replace.
   const readyRef = useRef(false);
   const peerListeners = useRef(new Set<(e: PeerEvent) => void>());
-  // Read by isLive from event handlers (undo), which would otherwise see the state of an old render.
+  // Read by liveProps/isLive, so send, undo and onOp can stay stable callbacks
+  // and still see the latest state instead of the state of an old render.
   const stateRef = useRef(state);
   stateRef.current = state;
 

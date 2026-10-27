@@ -6,7 +6,7 @@
 // onOp alone.
 import { useEffect, useRef, useState } from "react";
 import { MAX_TEXT } from "../types";
-import type { ClientMessage, Shape, ShapePatch } from "../types";
+import type { ClientMessage, Shape, ShapePatch, ShapeProps } from "../types";
 import {
   boxCorners,
   boxFromCorners,
@@ -123,14 +123,22 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     };
   };
 
-  const startTextEdit = (shape: Shape | null, at: Pt) => {
-    const p: any = shape?.props;
-    setSelectedId(shape ? shape.id : null);
-    setEdit(
-      shape
-        ? { id: shape.id, x: p.x, y: p.y, width: p.width, height: p.height, value: p.text }
-        : { id: null, x: at.x, y: at.y - TEXT_HEIGHT / 2, width: 160, height: TEXT_HEIGHT, value: "" }
-    );
+  // The shape (if any) under an element: every ShapeView wraps itself in a <g data-id>.
+  const shapeAt = (el: Element | null) => {
+    const id = el?.closest("[data-id]")?.getAttribute("data-id");
+    return shapes.find((s) => s.id === id);
+  };
+
+  // Edit an existing text shape in place, or start a new one vertically centered on `at`.
+  const startTextEdit = (shape: Shape | undefined, at: Pt) => {
+    if (shape?.props.type === "text") {
+      const { x, y, width, height, text } = shape.props;
+      setSelectedId(shape.id);
+      setEdit({ id: shape.id, x, y, width, height, value: text });
+    } else {
+      setSelectedId(null);
+      setEdit({ id: null, x: at.x, y: at.y - TEXT_HEIGHT / 2, width: 160, height: TEXT_HEIGHT, value: "" });
+    }
   };
 
   const commitText = () => {
@@ -141,11 +149,12 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     setEdit(null);
     if (!ed.value.trim()) return; // the server requires 1+ chars; empty = cancel
     if (ed.id) {
-      const s: any = shapes.find((x) => x.id === ed.id);
-      if (s && s.props.text !== ed.value) onOp({ type: "update", id: ed.id, patch: { text: ed.value } });
+      const s = shapes.find((x) => x.id === ed.id);
+      if (s?.props.type === "text" && s.props.text !== ed.value) onOp({ type: "update", id: ed.id, patch: { text: ed.value } });
     } else {
       const id = crypto.randomUUID();
       // Rough width estimate so the box hugs the text; the user can resize after.
+      // Capped at the server's max size (10,000).
       const width = Math.min(10_000, Math.max(10, Math.ceil(ed.value.length * fontSizeFor(TEXT_HEIGHT) * 0.6)));
       onOp({
         type: "create",
@@ -157,14 +166,10 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (disabled || e.button !== 0) return;
+    // The text tool opens its editor in onClick, not here (see onClick for why).
+    if (disabled || e.button !== 0 || tool === "text") return;
     const target = e.target as Element;
     const p = pointFrom(e);
-    const hitId = target.closest("[data-id]")?.getAttribute("data-id") ?? null;
-    const hit = shapes.find((s) => s.id === hitId) ?? null;
-
-    // The text tool opens its editor in onClick, not here (see onClick for why).
-    if (tool === "text") return;
 
     // Edge case: R6. Capture the pointer so the drag keeps receiving moves and the
     // pointerup even when the cursor leaves the SVG (otherwise a release outside
@@ -178,9 +183,11 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     }
 
     const handle = target.closest("[data-handle]")?.getAttribute("data-handle") ?? null;
+    const hit = shapeAt(target);
     if (handle && selected) {
       const before = geometryOf(selected.props);
-      const anchor = handle.startsWith("p") ? null : boxCorners(selected.props)[(Number(handle) + 2) % 4];
+      // A box resize pins the corner opposite the grabbed one; a line has no anchor.
+      const anchor = "x" in before ? boxCorners(before)[(Number(handle) + 2) % 4] : null;
       setGesture({ kind: "resize", id: selected.id, start: p, anchor, handle, before, geom: before, moved: false, lastSent: 0 });
     } else if (hit) {
       setSelectedId(hit.id);
@@ -207,8 +214,9 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
 
     let geom: Geometry;
     if (g.kind === "move") geom = moveBy(g.before, p.x - g.start.x, p.y - g.start.y);
-    else if (g.handle === "p1") geom = { ...(g.before as any), x1: p.x, y1: p.y };
-    else if (g.handle === "p2") geom = { ...(g.before as any), x2: p.x, y2: p.y };
+    // p1/p2 handles exist only on lines, so `before` is line geometry here.
+    else if (g.handle === "p1") geom = { ...g.before, x1: p.x, y1: p.y };
+    else if (g.handle === "p2") geom = { ...g.before, x2: p.x, y2: p.y };
     else geom = boxFromCorners(g.anchor!.x, g.anchor!.y, p.x, p.y);
 
     const next = { ...g, geom, moved: g.moved || !sameGeometry(geom, g.before) };
@@ -230,21 +238,22 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     setGesture(null);
 
     if (g.kind === "create") {
-      const geom: any = g.geom;
+      const geom = g.geom;
       const tooSmall =
-        g.shapeType === "line"
+        "x1" in geom
           ? Math.hypot(geom.x2 - geom.x1, geom.y2 - geom.y1) < MIN_DRAW
           : geom.width < MIN_DRAW || geom.height < MIN_DRAW;
       if (tooSmall) return; // Edge case: V5, discard zero-size shapes
       const id = crypto.randomUUID(); // client id makes a retried create idempotent (C1)
-      onOp({ type: "create", id, props: { type: g.shapeType, ...geom, color } });
+      // Cast: TS can't see that shapeType "line" always comes with line geometry.
+      onOp({ type: "create", id, props: { type: g.shapeType, ...geom, color } as ShapeProps });
       setSelectedId(id);
       setTool("select");
       return;
     }
 
-    // A plain click (no movement) only selects: no op, no undo entry. Check the
-    // shape is still live too, in case it was deleted after the last render.
+    // A plain click (no movement) only selects: no op, no undo entry. Also check the
+    // shape is still live: a render that removed it may not have run the C3 effect yet.
     if (!g.moved || !shapes.some((s) => s.id === g.id)) return;
     // Always send the final frame: throttling may have skipped the last moves, and
     // `moved` (not before != after) decides, because a drag that returns to its start
@@ -259,9 +268,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
   // click time the focus move is over, so the new input keeps focus.
   const onClick = (e: React.MouseEvent) => {
     if (disabled || tool !== "text") return;
-    const hitId = (e.target as Element).closest("[data-id]")?.getAttribute("data-id");
-    const hit = shapes.find((s) => s.id === hitId);
-    startTextEdit(hit?.props.type === "text" ? hit : null, pointFrom(e));
+    startTextEdit(shapeAt(e.target as Element), pointFrom(e));
     setTool("select");
   };
 
@@ -269,10 +276,8 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     if (disabled || tool !== "select") return;
     // Not e.target: pointer capture (R6) retargets the clicks to the <svg>, so
     // hit-test at the pointer position to find the shape under it.
-    const hit = document.elementFromPoint(e.clientX, e.clientY);
-    const id = hit?.closest("[data-id]")?.getAttribute("data-id");
-    const s = shapes.find((x) => x.id === id);
-    if (s?.props.type === "text") startTextEdit(s, { x: 0, y: 0 });
+    const s = shapeAt(document.elementFromPoint(e.clientX, e.clientY));
+    if (s?.props.type === "text") startTextEdit(s, { x: 0, y: 0 }); // `at` only matters for a new box
   };
 
   const onColor = (c: string) => {
@@ -287,7 +292,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
   // would otherwise make it jump back, while a peer's color change still shows.
   const display = shapes.map((s) =>
     gesture && gesture.kind !== "create" && gesture.id === s.id
-      ? { ...s, props: { ...s.props, ...gesture.geom } as any }
+      ? { ...s, props: { ...s.props, ...gesture.geom } as ShapeProps }
       : s
   );
   const selectedDisplay = display.find((s) => s.id === selectedId);
@@ -310,6 +315,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
       <div style={{ position: "relative" }}>
         <svg
           ref={svgRef}
+          className="board"
           width="100%"
           height={BOARD_HEIGHT}
           onPointerDown={onPointerDown}
@@ -321,10 +327,6 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
           onClick={onClick}
           onDoubleClick={onDoubleClick}
           style={{
-            display: "block",
-            background: "#fff",
-            border: "1px solid #ddd",
-            borderRadius: 8,
             cursor: disabled ? "not-allowed" : tool === "select" ? "default" : "crosshair",
             opacity: disabled ? 0.6 : 1,
             touchAction: "none",
@@ -336,7 +338,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
           ))}
           {gesture?.kind === "create" && (
             <g opacity={0.6} pointerEvents="none">
-              <ShapeView id="draft" props={{ type: gesture.shapeType, ...gesture.geom, color } as any} />
+              <ShapeView id="draft" props={{ type: gesture.shapeType, ...gesture.geom, color } as ShapeProps} />
             </g>
           )}
           {selectedDisplay && !disabled && <SelectionHandles props={selectedDisplay.props} />}

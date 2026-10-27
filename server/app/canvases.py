@@ -1,9 +1,11 @@
+"""Canvas list, create, open and invite (/api/canvases)."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth import current_user, require_canvas_member
+from app.auth import current_user, public_user, require_canvas_member
 from app.db import get_pool
 
 router = APIRouter(prefix="/api/canvases")
@@ -27,7 +29,7 @@ async def _members(canvas_id: str) -> list[dict]:
         """,
         UUID(canvas_id),
     )
-    return [{"id": str(r["id"]), "username": r["username"], "email": r["email"]} for r in rows]
+    return [public_user(r) for r in rows]
 
 
 @router.get("")
@@ -35,7 +37,7 @@ async def list_canvases(user: dict = Depends(current_user)) -> list[dict]:
     pool = await get_pool()
     rows = await pool.fetch(
         """
-        SELECT c.id, c.name, c.created_at, c.updated_at, o.username AS owner
+        SELECT c.id, c.name, c.updated_at, o.username AS owner
         FROM canvas_members m
         JOIN canvases c ON c.id = m.canvas_id
         JOIN users o ON o.id = c.owner_id
@@ -59,6 +61,7 @@ async def list_canvases(user: dict = Depends(current_user)) -> list[dict]:
 async def create_canvas(body: CreateCanvasBody, user: dict = Depends(current_user)) -> dict:
     name = body.name.strip() or "Untitled canvas"
     pool = await get_pool()
+    # One transaction: a canvas never exists without its owner's membership row.
     async with pool.acquire() as conn, conn.transaction():
         canvas_id = await conn.fetchval(
             "INSERT INTO canvases (name, owner_id) VALUES ($1, $2) RETURNING id",
@@ -92,6 +95,8 @@ async def invite_member(
     )
     if invitee is None:
         raise HTTPException(404, f"No user with username or email '{ident}'")
+    # Edge case: C4/V8 duplicate or concurrent invite (or inviting a member) -> the
+    # (canvas_id, user_id) primary key keeps one row, and DO NOTHING makes it a 200.
     await pool.execute(
         """
         INSERT INTO canvas_members (canvas_id, user_id, added_by) VALUES ($1, $2, $3)

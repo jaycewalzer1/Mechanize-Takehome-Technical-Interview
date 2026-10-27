@@ -36,7 +36,6 @@ export type LineProps = {
 };
 
 export type ShapeProps = BoxProps | TextProps | LineProps;
-export type ShapeType = ShapeProps["type"];
 
 // Geometry is written as one whole group (last write wins on the group, so a
 // concurrent drag and resize can't mix into a shape nobody drew). Color and

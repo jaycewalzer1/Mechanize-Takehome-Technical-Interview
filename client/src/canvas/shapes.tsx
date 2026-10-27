@@ -10,13 +10,13 @@ const clamp = (v: number) => Math.max(-COORD_LIMIT, Math.min(COORD_LIMIT, v));
 
 // The full geometry group for a shape. Updates always send the whole group
 // (PLAN.md conflict policy), so this is the unit both sends and undo use.
-export function geometryOf(p: any): Geometry {
+export function geometryOf(p: ShapeProps): Geometry {
   return p.type === "line"
     ? { x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 }
     : { x: p.x, y: p.y, width: p.width, height: p.height };
 }
 
-export function moveBy(g: any, dx: number, dy: number): Geometry {
+export function moveBy(g: Geometry, dx: number, dy: number): Geometry {
   return "x1" in g
     ? { x1: clamp(g.x1 + dx), y1: clamp(g.y1 + dy), x2: clamp(g.x2 + dx), y2: clamp(g.y2 + dy) }
     : { x: clamp(g.x + dx), y: clamp(g.y + dy), width: g.width, height: g.height };
@@ -34,16 +34,15 @@ export function boxFromCorners(ax: number, ay: number, bx: number, by: number): 
   };
 }
 
-export function sameGeometry(a: any, b: any): boolean {
+export function sameGeometry(a: Record<string, number>, b: Record<string, number>): boolean {
   return Object.keys(a).every((k) => a[k] === b[k]);
 }
 
 // Text size follows the box height, so resizing a text box scales its font.
 export const fontSizeFor = (height: number) => height * 0.75;
 
-export function ShapeView({ id, props }: { id: string; props: ShapeProps }) {
-  const p: any = props;
-  // data-id lets the Board's single pointerdown handler find which shape was hit.
+// data-id on each shape's <g> is how the Board's pointer handlers find which shape was hit.
+export function ShapeView({ id, props: p }: { id: string; props: ShapeProps }) {
   if (p.type === "line") {
     return (
       <g data-id={id}>
@@ -86,7 +85,7 @@ export function ShapeView({ id, props }: { id: string; props: ShapeProps }) {
 
 // Box handles are numbered clockwise from top-left. The resize anchor is the opposite
 // corner, (i + 2) % 4. Line handles are its two endpoints.
-export function boxCorners(p: any) {
+export function boxCorners(p: BoxGeometry) {
   return [
     { x: p.x, y: p.y },
     { x: p.x + p.width, y: p.y },
@@ -95,9 +94,8 @@ export function boxCorners(p: any) {
   ];
 }
 
-export function SelectionHandles({ props }: { props: ShapeProps }) {
-  const p: any = props;
-  const handle = { r: 5, fill: "#fff", stroke: "#2563eb", strokeWidth: 1.5, style: { cursor: "pointer" } };
+export function SelectionHandles({ props: p }: { props: ShapeProps }) {
+  const handle = { r: 5, className: "handle" }; // colors in styles.css
   if (p.type === "line") {
     return (
       <g>
@@ -108,7 +106,7 @@ export function SelectionHandles({ props }: { props: ShapeProps }) {
   }
   return (
     <g>
-      <rect x={p.x} y={p.y} width={p.width} height={p.height} fill="none" stroke="#2563eb" strokeDasharray="4 3" pointerEvents="none" />
+      <rect x={p.x} y={p.y} width={p.width} height={p.height} className="selection-outline" />
       {boxCorners(p).map((c, i) => (
         <circle key={i} data-handle={String(i)} cx={c.x} cy={c.y} {...handle} />
       ))}

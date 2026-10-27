@@ -1,3 +1,5 @@
+"""Accounts and server-side sessions (/api/auth), plus the canvas membership check."""
+
 import hashlib
 import os
 import re
@@ -8,10 +10,9 @@ from uuid import UUID
 import asyncpg
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from starlette.requests import HTTPConnection
 
 from app.db import get_pool
 
@@ -26,6 +27,7 @@ _hasher = PasswordHasher()
 _DUMMY_HASH = _hasher.hash("dummy-password")
 
 
+# Only the hash is stored, so a leaked sessions table can't be replayed as cookies.
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -50,9 +52,8 @@ async def user_from_token(token: str | None) -> dict | None:
     return public_user(row) if row else None
 
 
-async def current_user(conn: HTTPConnection) -> dict:
-    # HTTPConnection (not Request) so this dependency also works on WebSocket routes.
-    user = await user_from_token(conn.cookies.get(SESSION_COOKIE))
+async def current_user(request: Request) -> dict:
+    user = await user_from_token(request.cookies.get(SESSION_COOKIE))
     if user is None:
         raise HTTPException(status_code=401, detail="Not logged in")
     return user
@@ -144,6 +145,7 @@ async def signup(body: SignupBody, response: Response) -> dict:
     if not EMAIL_RE.match(email):
         raise HTTPException(400, "Invalid email address")
 
+    # argon2 is deliberately slow CPU work: run it off the event loop.
     password_hash = await run_in_threadpool(_hasher.hash, body.password)
     pool = await get_pool()
     try:
@@ -157,6 +159,7 @@ async def signup(body: SignupBody, response: Response) -> dict:
             password_hash,
         )
     except asyncpg.UniqueViolationError as e:
+        # Edge case: C5 concurrent signups -> the case-insensitive unique index lets one win.
         field = "Email" if "email" in (e.constraint_name or "") else "Username"
         raise HTTPException(409, f"{field} is already taken") from None
     await _start_session(response, row["id"])
@@ -180,6 +183,7 @@ async def login(body: LoginBody, response: Response) -> dict:
         )
     except (VerificationError, InvalidHashError):
         ok = False
+    # Edge case: S4 one message for unknown user and wrong password.
     if not row or not ok:
         raise HTTPException(401, "Invalid username/email or password")
     await _start_session(response, row["id"])
@@ -187,8 +191,8 @@ async def login(body: LoginBody, response: Response) -> dict:
 
 
 @router.post("/logout")
-async def logout(conn: HTTPConnection, response: Response) -> dict:
-    token = conn.cookies.get(SESSION_COOKIE)
+async def logout(request: Request, response: Response) -> dict:
+    token = request.cookies.get(SESSION_COOKIE)
     if token:
         pool = await get_pool()
         await pool.execute("DELETE FROM sessions WHERE token_hash = $1", _hash_token(token))

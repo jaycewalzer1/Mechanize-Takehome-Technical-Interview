@@ -1,3 +1,5 @@
+"""The shared asyncpg pool, and startup: wait for Postgres, then apply schema.sql."""
+
 import asyncio
 import logging
 import os

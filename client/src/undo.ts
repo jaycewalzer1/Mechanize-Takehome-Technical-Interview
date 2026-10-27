@@ -6,7 +6,7 @@ import { useCallback, useMemo, useRef } from "react";
 import type { ClientMessage, ShapePatch } from "./types";
 
 // One entry per user action, so a whole drag or resize is a single undo step (U5).
-export type UndoEntry =
+type UndoEntry =
   | { kind: "create"; id: string }
   | { kind: "delete"; id: string }
   // before/after hold only what the action changed: the whole geometry group
@@ -75,5 +75,6 @@ export function useUndo(send: (op: ClientMessage) => boolean, isLive: (id: strin
 
   const undo = useCallback(() => step(undoStack.current, redoStack.current, undoOp), [step]);
   const redo = useCallback(() => step(redoStack.current, undoStack.current, redoOp), [step]);
+  // One stable object, so CanvasPage's keydown effect (deps: [history]) isn't re-added every render.
   return useMemo(() => ({ record, undo, redo }), [record, undo, redo]);
 }

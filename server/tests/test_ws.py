@@ -113,7 +113,7 @@ def test_W2_bad_frames_get_error_and_socket_stays_open(client):
 def test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry(client):
     """Alice drags a rect while Bob drags its left edge, at the same time.
 
-    Both clients must end on the DB row (C2/C6), and that row's geometry must be
+    Both clients must end on the DB row (C2), and that row's geometry must be
     exactly one of the geometries someone sent, never a per-field mix.
     """
     canvas_id, alice, bob = _shared_canvas(client)

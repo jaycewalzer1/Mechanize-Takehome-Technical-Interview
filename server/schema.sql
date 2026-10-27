@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS canvases (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name       TEXT NOT NULL,
     owner_id   UUID NOT NULL REFERENCES users(id),
-    -- Monotonic per-canvas op sequence; bumped for every applied op (phase 3).
+    -- Monotonic per-canvas op counter, bumped under the row lock by every shape op;
+    -- the new value becomes the changed shape's version (see app/shapes.py).
     seq        BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -40,8 +41,8 @@ CREATE TABLE IF NOT EXISTS canvas_members (
 CREATE INDEX IF NOT EXISTS canvas_members_user_id ON canvas_members (user_id);
 
 -- Shapes are never row-deleted: deletion sets `deleted` (a tombstone) so late
--- updates to a deleted shape can be recognised and dropped, and undo of a
--- delete can resurrect it.
+-- updates to a deleted shape can be recognised and rejected, and an explicit
+-- `restore` (undo of a delete) can bring it back with the same id and props.
 CREATE TABLE IF NOT EXISTS shapes (
     id         UUID PRIMARY KEY,  -- client-generated so creates are idempotent
     canvas_id  UUID NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,

@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth import current_user, require_canvas_member
 from app.db import get_pool
@@ -10,11 +10,11 @@ router = APIRouter(prefix="/api/canvases")
 
 
 class CreateCanvasBody(BaseModel):
-    name: str = ""
+    name: str = Field(default="", max_length=100)
 
 
 class InviteBody(BaseModel):
-    identifier: str  # username or email
+    identifier: str = Field(max_length=254)  # username or email
 
 
 async def _members(canvas_id: str) -> list[dict]:
@@ -57,7 +57,7 @@ async def list_canvases(user: dict = Depends(current_user)) -> list[dict]:
 
 @router.post("")
 async def create_canvas(body: CreateCanvasBody, user: dict = Depends(current_user)) -> dict:
-    name = body.name.strip()[:100] or "Untitled canvas"
+    name = body.name.strip() or "Untitled canvas"
     pool = await get_pool()
     async with pool.acquire() as conn, conn.transaction():
         canvas_id = await conn.fetchval(

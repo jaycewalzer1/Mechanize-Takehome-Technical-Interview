@@ -8,23 +8,33 @@ export default function CanvasPage() {
   const [error, setError] = useState<any>(null);
   const [invitee, setInvitee] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    let ignore = false; // a stale response for a previous id must not overwrite this one
     setCanvas(null);
     setError(null);
-    api(`/canvases/${id}`).then(setCanvas).catch(setError);
+    api(`/canvases/${id}`)
+      .then((c) => !ignore && setCanvas(c))
+      .catch((e) => !ignore && setError(e));
+    return () => {
+      ignore = true;
+    };
   }, [id]);
 
   const invite = async (e: any) => {
     e.preventDefault();
     setInviteMsg("");
+    setBusy(true);
     try {
       const { members } = await api(`/canvases/${id}/members`, { body: { identifier: invitee } });
-      setCanvas({ ...canvas, members });
+      setCanvas((c: any) => ({ ...c, members }));
       setInviteMsg(`Invited ${invitee}`);
       setInvitee("");
     } catch (err: any) {
       setInviteMsg(err.message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -49,7 +59,7 @@ export default function CanvasPage() {
         <span className="spacer" />
         <form onSubmit={invite} className="row">
           <input placeholder="Invite by username or email" value={invitee} onChange={(e) => setInvitee(e.target.value)} required />
-          <button>Invite</button>
+          <button disabled={busy}>Invite</button>
         </form>
       </section>
       {inviteMsg && <div className="muted">{inviteMsg}</div>}

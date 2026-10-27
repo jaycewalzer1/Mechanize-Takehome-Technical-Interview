@@ -9,18 +9,27 @@ export default function CanvasList() {
   const [canvases, setCanvases] = useState<any[] | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api("/canvases").then(setCanvases).catch((e) => setError(e.message));
+    let ignore = false; // drop the response if we unmounted (StrictMode double-mount)
+    api("/canvases")
+      .then((cs) => !ignore && setCanvases(cs))
+      .catch((e) => !ignore && setError(e.message));
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const create = async (e: any) => {
     e.preventDefault();
+    setBusy(true); // disabled in flight so a double-click can't create two canvases
     try {
       const c = await api("/canvases", { body: { name } });
       navigate(`/canvas/${c.id}`);
     } catch (err: any) {
       setError(err.message);
+      setBusy(false);
     }
   };
 
@@ -33,8 +42,8 @@ export default function CanvasList() {
         <button onClick={logout}>Log out</button>
       </header>
       <form onSubmit={create} className="row">
-        <input placeholder="New canvas name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button>Create canvas</button>
+        <input placeholder="New canvas name" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
+        <button disabled={busy}>Create canvas</button>
       </form>
       {error && <div className="error">{error}</div>}
       {canvases === null ? (

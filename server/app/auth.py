@@ -1,4 +1,5 @@
 import hashlib
+import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -9,12 +10,13 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.requests import HTTPConnection
 
 from app.db import get_pool
 
-SESSION_COOKIE = "session"
+SESSION_COOKIE = "session_id"
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
 SESSION_TTL = timedelta(days=30)
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{2,32}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -113,6 +115,7 @@ async def _start_session(response: Response, user_id) -> None:
         max_age=int(SESSION_TTL.total_seconds()),
         httponly=True,
         samesite="lax",
+        secure=COOKIE_SECURE,
         path="/",
     )
 
@@ -120,15 +123,16 @@ async def _start_session(response: Response, user_id) -> None:
 router = APIRouter(prefix="/api/auth")
 
 
+# Max lengths bound the work an attacker can force (argon2 on a huge password).
 class SignupBody(BaseModel):
-    username: str
-    email: str
-    password: str
+    username: str = Field(max_length=32)
+    email: str = Field(max_length=254)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class LoginBody(BaseModel):
-    identifier: str  # username or email
-    password: str
+    identifier: str = Field(max_length=254)  # username or email
+    password: str = Field(max_length=128)
 
 
 @router.post("/signup")
@@ -139,8 +143,6 @@ async def signup(body: SignupBody, response: Response) -> dict:
         raise HTTPException(400, "Username must be 2-32 characters: letters, digits, _ . -")
     if not EMAIL_RE.match(email):
         raise HTTPException(400, "Invalid email address")
-    if len(body.password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters")
 
     password_hash = await run_in_threadpool(_hasher.hash, body.password)
     pool = await get_pool()

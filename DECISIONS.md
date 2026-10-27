@@ -22,7 +22,7 @@
 - `.gitignore`: added `*.tsbuildinfo`, `.pytest_cache/`, `*.log`.
 - `client/src/App.tsx`: router root.
 - `SETUP.md`: removed the manual `psql -f schema.sql` step.
-- `client/Dockerfile`: a LIMITATION comment only (no behavior change) on the unpinned `npm install`; see REVIEW item 7.
+- `client/Dockerfile`, `docker-compose.yml` (client `build`): the client image builds from the repo root and runs `npm ci` against the workspace `package-lock.json`, so a fresh build installs exactly the tested versions. Added a root `.dockerignore`; removed `client/.dockerignore` (unused now). `package-lock.json` regenerated, because the Mac-generated one lacked Rollup's Linux native packages, so `npm ci` in the Linux image crashed Vite (`Cannot find module @rollup/rollup-linux-arm64-musl`).
 - `README.md`: appended run/architecture/decisions/limitations sections below the assignment text (original text unchanged).
 - Added `client/.dockerignore` / `server/.dockerignore`: without them `COPY . .` overwrote the container's node_modules with the host's (macOS) ones.
 

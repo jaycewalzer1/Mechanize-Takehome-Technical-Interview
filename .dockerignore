@@ -1,0 +1,6 @@
+# Only the client image builds from the repo root; keep the upload small.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+server
+.git

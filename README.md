@@ -159,13 +159,12 @@ Full reasoning, alternatives and weaknesses are in [DECISIONS.md](DECISIONS.md).
 - **A rejected edit costs a quick reconnect** (the client resyncs from a snapshot). Rejections only happen on races like editing a just-deleted shape, or on a full canvas (2000 live shapes).
 - A client whose socket is slower than 2 s per send is dropped and reconnects.
 - Cursor positions are relative to the editor box. If the toolbar wraps to a different height in a very narrow window, remote cursors are offset.
-- **The client Docker image installs without a lockfile.** The lockfile is the workspace one at the repo root and the build context is `./client`, so a fresh build can resolve newer minor versions (`vite ^6`, `react-router-dom ^7`) than the ones tested. Fix: build from the repo root, copy `package-lock.json`, and use `npm ci`.
 - **Signup isn't one transaction.** The user row and the first session are inserted separately. If the session insert fails, the account exists but the response is an error, and retrying says the username is taken (logging in works). Fix: one `conn.transaction()` around both.
 - Expired session rows aren't swept. Last writer wins means a concurrent drag simply loses to the later one, with no notification.
 
 ## Next steps
 
-1. Close sockets on logout and recheck session expiry per op (W13). Wrap signup in one transaction, and pin client dependencies with `npm ci`.
+1. Close sockets on logout and recheck session expiry per op (W13). Wrap signup in one transaction.
 2. A test that forces out-of-order broadcasts, to pin down C6.
 3. Postgres `LISTEN/NOTIFY` for multi-worker rooms.
 4. Server-side undo log, so history survives a refresh.

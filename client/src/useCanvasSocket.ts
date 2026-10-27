@@ -31,10 +31,7 @@ function applyFrame(state: State, f: ShapeFrame): State {
 // Optimistic apply (PLAN client rules): props change now, `version` doesn't,
 // so the server's echo (always a higher version) still passes the filter and
 // replaces this with the committed state.
-// LIMITATION: a rejected op on a shape nobody else touched gets a correction
-// frame with the version we already hold, which the filter drops -> my local
-// state stays wrong until reconnect. Only reachable if the client sends
-// something invalid; fix: apply equal-version frames too (needs a PLAN change).
+// Edge case: W6 a rejected op is undone by reconnecting on `error` (see onmessage), not here.
 function applyLocal(state: State, op: Exclude<ClientMessage, { type: "cursor" }>): State {
   const held = state.byId[op.id];
   let next: Held;
@@ -114,6 +111,11 @@ export function useCanvasSocket(canvasId: string) {
             break;
           case "error":
             setError(msg.detail);
+            // The op this answers was applied optimistically, and the version filter
+            // can't undo it (the correction frame has the version we hold; a rejected
+            // create gets none). Closing reconnects through onclose, and the fresh
+            // snapshot replaces local state with the DB's. Errors are rare, so this is cheap.
+            ws.close();
             break;
         }
       };
@@ -145,22 +147,26 @@ export function useCanvasSocket(canvasId: string) {
     };
   }, [canvasId]);
 
-  // Returns false when the op wasn't sent. Edge case: W6 nothing is queued while
-  // disconnected, so an edit is never shown as saved when it wasn't.
-  const send = useCallback((op: ClientMessage): boolean => {
-    const ws = wsRef.current;
-    if (!readyRef.current || !ws || ws.readyState !== WebSocket.OPEN) return false;
-    if (op.type !== "cursor") setState((s) => applyLocal(s, op));
-    ws.send(JSON.stringify(op));
-    return true;
-  }, []);
-
   // Current props of a live shape, or undefined if it's deleted or unknown.
   const liveProps = useCallback((id: string): ShapeProps | undefined => {
     const held = stateRef.current.byId[id];
     return held && !held.deleted ? held.props : undefined;
   }, []);
   const isLive = useCallback((id: string) => liveProps(id) !== undefined, [liveProps]);
+
+  // Returns false when the op wasn't sent. Edge case: W6 nothing is queued while
+  // disconnected, so an edit is never shown as saved when it wasn't.
+  const send = useCallback((op: ClientMessage): boolean => {
+    const ws = wsRef.current;
+    if (!readyRef.current || !ws || ws.readyState !== WebSocket.OPEN) return false;
+    // Edge case: C3 an update/delete for a shape we know is gone can only be rejected,
+    // and every rejection costs a reconnect, so a drag still running on a just-deleted
+    // shape would reconnect over and over. Drop those here instead.
+    if ((op.type === "update" || op.type === "delete") && !isLive(op.id)) return false;
+    if (op.type !== "cursor") setState((s) => applyLocal(s, op));
+    ws.send(JSON.stringify(op));
+    return true;
+  }, [isLive]);
 
   // Cursor frames go to subscribers instead of state here, so they re-render
   // only <Cursors>, never the Board (P4). Returns the unsubscribe function.

@@ -1,3 +1,5 @@
+// One canvas: REST loads its name and members (404/403 handled here), then
+// CanvasEditor opens the live socket for the shapes.
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError } from "../api";

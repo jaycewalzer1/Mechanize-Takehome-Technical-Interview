@@ -1,3 +1,4 @@
+// Who is logged in, shared app-wide; RequireAuth sends anyone without a session to /login.
 import { createContext, useContext, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { api, ApiError, SESSION_EXPIRED } from "./api";
@@ -15,6 +16,8 @@ export function AuthProvider({ children }: { children: any }) {
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // The session cookie is httpOnly (JS can't read it), so ask the server once on load
+  // whether it's still valid. A 401 just means "not logged in", not an error.
   useEffect(() => {
     api("/auth/me")
       .then(setUser)

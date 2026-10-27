@@ -16,6 +16,7 @@ async def ensure_test_db() -> None:
     admin = await asyncpg.connect(ADMIN_URL)
     try:
         if not await admin.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", TEST_DB):
+            # CREATE DATABASE can't take a $1 parameter; TEST_DB is a constant, not input.
             await admin.execute(f'CREATE DATABASE "{TEST_DB}"')
     finally:
         await admin.close()

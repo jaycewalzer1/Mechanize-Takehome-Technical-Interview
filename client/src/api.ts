@@ -1,3 +1,5 @@
+// The one HTTP client: every REST call goes through api(), which turns any non-2xx
+// into an ApiError carrying the server's readable `detail`.
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -17,6 +19,7 @@ export async function api(path: string, opts: { method?: string; body?: any } = 
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     credentials: "same-origin",
   });
+  // Edge case: F5 an empty body (and F4 a non-JSON one) fails to parse -> null, not a throw.
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     // Edge case: S2 a 401 outside /auth/* means the session expired or was logged out

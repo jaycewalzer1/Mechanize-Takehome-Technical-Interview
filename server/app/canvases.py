@@ -35,6 +35,8 @@ async def _members(canvas_id: str) -> list[dict]:
 @router.get("")
 async def list_canvases(user: dict = Depends(current_user)) -> list[dict]:
     pool = await get_pool()
+    # One query through the canvas_members(user_id) index, no N+1 (P1). No pagination:
+    # a user's canvas list is small in this context (P2).
     rows = await pool.fetch(
         """
         SELECT c.id, c.name, c.updated_at, o.username AS owner

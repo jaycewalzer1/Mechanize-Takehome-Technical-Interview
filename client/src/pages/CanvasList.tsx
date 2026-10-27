@@ -1,3 +1,4 @@
+// Home page: the canvases I'm a member of, plus a form to create a new one.
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
@@ -26,6 +27,7 @@ export default function CanvasList() {
     setBusy(true); // disabled in flight so a double-click can't create two canvases
     try {
       const c = await api("/canvases", { body: { name } });
+      // No setBusy(false) on success: we navigate away, and re-enabling first would allow a second create.
       navigate(`/canvas/${c.id}`);
     } catch (err: any) {
       setError(err.message);

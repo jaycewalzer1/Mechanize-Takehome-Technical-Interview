@@ -41,6 +41,7 @@ async def user_from_token(token: str | None) -> dict | None:
     if not token:
         return None
     pool = await get_pool()
+    # Edge case: S2 expired sessions are rejected by the query itself.
     row = await pool.fetchrow(
         """
         SELECT u.id, u.username, u.email
@@ -199,6 +200,9 @@ async def login(body: LoginBody, response: Response) -> dict:
 @router.post("/logout")
 async def logout(request: Request, response: Response) -> dict:
     token = request.cookies.get(SESSION_COOKIE)
+    # Edge case: S3 deleting the row (not just the cookie) makes a copied old cookie useless.
+    # LIMITATION: W13 a socket opened with this session stays open until it disconnects
+    # -> close the user's sockets on logout, or recheck the session per op.
     if token:
         pool = await get_pool()
         await pool.execute("DELETE FROM sessions WHERE token_hash = $1", _hash_token(token))

@@ -1,3 +1,4 @@
+// Login and signup share one form; on success, return to the page RequireAuth redirected from.
 import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
@@ -11,6 +12,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Set by RequireAuth; the Login/Sign up links below pass it along so switching forms keeps it.
   const dest = location.state?.from ?? "/";
   if (user) return <Navigate to={dest} replace />;
 

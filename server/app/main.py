@@ -22,6 +22,7 @@ app.include_router(ws.router)
 
 @app.get("/health")
 async def health() -> dict:
+    # Queries the DB so a healthy response also means Postgres is reachable.
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.fetchval("SELECT 1")

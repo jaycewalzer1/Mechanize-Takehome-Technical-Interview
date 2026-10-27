@@ -99,6 +99,8 @@ export function useCanvasSocket(canvasId: string) {
               ),
             });
             emitPeers({ type: "reset" });
+            // Backoff resets only once a snapshot arrives, not on open: a server that
+            // accepts and then fails right away still gets increasing delays.
             attempt = 0;
             readyRef.current = true;
             setStatus("open");

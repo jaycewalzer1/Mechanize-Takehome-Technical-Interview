@@ -27,6 +27,7 @@ async def get_pool() -> asyncpg.Pool:
 
 async def init_db(attempts: int = 30) -> None:
     """Connect (retrying while Postgres boots) and apply the idempotent schema."""
+    # Edge case: F8 cold start -> retry until Postgres accepts connections, don't crash.
     for attempt in range(1, attempts + 1):
         try:
             p = await get_pool()

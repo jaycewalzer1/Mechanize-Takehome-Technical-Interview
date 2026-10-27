@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Edge case: C5/V8 uniqueness is case-insensitive, so "Alice" and "alice" can't both
+-- sign up. The same lower(...) expressions serve the login and invite lookups.
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower ON users (lower(username));
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower ON users (lower(email));
 
@@ -36,8 +38,11 @@ CREATE TABLE IF NOT EXISTS canvas_members (
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     added_by   UUID REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Edge case: C4 one membership row per (canvas, user), even under concurrent invites.
+    -- Also serves the per-canvas membership checks (leading column canvas_id).
     PRIMARY KEY (canvas_id, user_id)
 );
+-- Serves the canvas list (WHERE m.user_id = $1), which the PK can't (P1).
 CREATE INDEX IF NOT EXISTS canvas_members_user_id ON canvas_members (user_id);
 
 -- Shapes are never row-deleted: deletion sets `deleted` (a tombstone) so late
@@ -53,6 +58,7 @@ CREATE TABLE IF NOT EXISTS shapes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Serves the snapshot query and the live-shape count in app/shapes.py (P1).
 CREATE INDEX IF NOT EXISTS shapes_canvas_id ON shapes (canvas_id);
 
 -- Edge case: V2 defense in depth. Pydantic validates every write, but the DB also

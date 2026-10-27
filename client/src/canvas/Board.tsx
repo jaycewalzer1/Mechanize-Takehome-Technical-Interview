@@ -183,6 +183,8 @@ export default function Board({ shapes, onOp, onGesture, history, disabled }: Pr
     svgRef.current!.setPointerCapture(e.pointerId);
 
     if (tool !== "select") {
+      // A new shape is only a local draft until pointerup sends one create, so peers
+      // never see a half-drawn shape and undo gets a single entry for it.
       const geom = tool === "line" ? { x1: p.x, y1: p.y, x2: p.x, y2: p.y } : boxFromCorners(p.x, p.y, p.x, p.y);
       setGesture({ kind: "create", shapeType: tool, start: p, geom });
       return;
@@ -363,6 +365,8 @@ export default function Board({ shapes, onOp, onGesture, history, disabled }: Pr
             onBlur={commitText}
             onKeyDown={(e) => {
               if (e.key === "Enter") commitText();
+              // Escape cancels: the ref is cleared first, so the blur fired when the
+              // input unmounts finds nothing for commitText to send.
               if (e.key === "Escape") setEdit(null);
             }}
             style={{

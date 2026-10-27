@@ -10,8 +10,10 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import db
+from app import db, shapes
+from app import ws as ws_endpoint
 from app.main import app
+from app.ws_schemas import UpdateMsg
 from tests.conftest import ensure_test_db
 
 RECT = {"type": "rect", "x": 100, "y": 100, "width": 100, "height": 100, "color": "#000000"}
@@ -182,3 +184,54 @@ def test_C3_update_after_delete_is_rejected_and_never_resurrects(client):
     row = _db_shape(client, shape_id)
     assert row["deleted"] is True
     assert row["props"] == RECT
+
+
+def test_W6_edit_committed_during_snapshot_load_reaches_the_joiner(client, monkeypatch):
+    """Alice recolors a shape just after Bob's snapshot was read but before it was sent.
+
+    The snapshot can't contain the edit, so Bob only converges if the broadcast
+    reaches him (he joined the room first) and arrives after the snapshot (held in
+    conn.pending), not before it, where the older snapshot would overwrite it.
+    The race is forced, not timed: the edit commits inside load_snapshot.
+    """
+    canvas_id, alice, bob = _shared_canvas(client)
+    shape_id = str(uuid.uuid4())
+    url = f"/ws?canvas={canvas_id}"
+    with client.websocket_connect(url, headers=alice) as a:
+        alice_id = uuid.UUID(_next(a, "snapshot")["you"]["user_id"])
+        a.send_json({"type": "create", "id": shape_id, "props": RECT})
+        _next(a, "shape")
+
+        recolor = UpdateMsg.model_validate(
+            {"type": "update", "id": shape_id, "patch": {"color": "#ff0000"}}
+        )
+
+        async def snapshot_then_concurrent_edit(cid):
+            snapshot = await shapes.load_snapshot(cid)
+            frame = await shapes.apply_op(cid, alice_id, recolor)
+            await ws_endpoint._broadcast(cid, frame)
+            return snapshot
+
+        monkeypatch.setattr(ws_endpoint, "load_snapshot", snapshot_then_concurrent_edit)
+
+        with client.websocket_connect(url, headers=bob) as b:
+            frames = [b.receive_json()]
+            # A cursor from Alice marks the end: everything sent to Bob before it is in.
+            a.send_json({"type": "cursor", "x": 1, "y": 1})
+            while frames[-1]["type"] != "cursor":
+                frames.append(b.receive_json())
+
+    # Replay Bob's frames in arrival order with the client's rules (useCanvasSocket.ts).
+    held, seq = {}, 0
+    for f in frames:
+        if f["type"] == "snapshot":
+            held, seq = {s["id"]: s for s in f["shapes"]}, f["seq"]
+        elif f["type"] == "shape" and f["version"] > max(
+            held.get(f["id"], {}).get("version", 0), seq
+        ):
+            held[f["id"]] = f
+
+    row = _db_shape(client, shape_id)
+    assert row["props"]["color"] == "#ff0000"
+    assert held[shape_id]["props"] == row["props"]
+    assert held[shape_id]["version"] == row["version"]

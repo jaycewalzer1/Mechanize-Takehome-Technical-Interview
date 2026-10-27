@@ -165,12 +165,12 @@ This is the part that matters most for the deployment context (2-5 people editin
 - **Last writer wins on the geometry group.** Per-field merging was tried and proven to produce shapes nobody drew.
 - **Tombstones instead of row deletes**, so late updates can be recognized and undo-of-delete can restore the same id.
 - **Validation at the edge.** Every inbound WS frame goes through a Pydantic discriminated union (`server/app/ws_schemas.py`). That covers bounded finite coordinates, `#rrggbb` colors, text length, a whole geometry group, and no server-owned fields. A bad frame gets an error reply and the socket stays open.
-- **Few automated tests, aimed at races.** The four WS tests cover the handshake, bad frames, the concurrent drag vs. resize, and update-after-delete. Everything else was verified by hand.
+- **Few automated tests, aimed at races.** The five WS tests cover the handshake, bad frames, the concurrent drag vs. resize, update-after-delete, and an edit that commits while a new joiner loads its snapshot. Everything else was verified by hand.
 - **Two added dependencies only:** argon2-cffi (password hashing) and react-router-dom (routing). Nothing that does drawing, sync or undo. The theme is plain CSS variables in `client/src/styles.css`.
 
 ## How it was verified
 
-- `pytest` (4 WS race/failure tests), `ruff check`, and `npm run build` (strict TypeScript).
+- `pytest` (5 WS race/failure tests), `ruff check`, and `npm run build` (strict TypeScript).
 - Two browsers as two users for every requirement in the table above.
 - A final run on a fresh clone with an empty database: 5 scripted users on one canvas through the Vite proxy, firing at the same time. It covers 100 concurrent creates with retries (no duplicates), all 5 hammering one shape (every client ends equal to the DB row, geometry from exactly one sender), delete during 4 concurrent drags (rejected, never resurrected), restore, 12 kinds of malformed frames (one error each, socket kept, nothing persisted), cursor relay to the other 4 only, a dropped connection's `leave`, one user in two tabs, random mixed edits followed by a check that every client equals the DB and a fresh snapshot, and a server restart with the state intact. 26/26 checks passed on 3 consecutive runs, with no server errors logged.
 
@@ -202,7 +202,7 @@ This is the part that matters most for the deployment context (2-5 people editin
 2. `server/app/ws_schemas.py`: what a valid message is.
 3. `server/app/shapes.py`: one transaction per edit, locking, versions, tombstones.
 4. `server/app/ws.py`: handshake, room, snapshot, broadcast.
-5. `server/tests/test_ws.py`: the four race and failure tests.
+5. `server/tests/test_ws.py`: the five race and failure tests.
 6. `client/src/useCanvasSocket.ts`: reconnect, snapshot, version filter, optimistic apply.
 7. `client/src/canvas/Board.tsx`: pointer handling, gestures, text editing.
 8. `client/src/undo.ts`, then `client/src/pages/CanvasPage.tsx`: how undo, cursors and the Board are wired together.

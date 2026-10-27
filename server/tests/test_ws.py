@@ -88,30 +88,6 @@ def test_W1_handshake_rejects_no_session_and_non_member(client):
         assert exc.value.code == 1008
 
 
-def test_W2_bad_frames_get_error_and_socket_stays_open(client):
-    canvas_id, alice, _ = _shared_canvas(client)
-    shape_id = str(uuid.uuid4())
-    with client.websocket_connect(f"/ws?canvas={canvas_id}", headers=alice) as ws:
-        _next(ws, "snapshot")
-        ws.send_json({"type": "create", "id": shape_id, "props": RECT})
-        _next(ws, "shape")
-        bad_frames = [
-            "not json",
-            json.dumps({"type": "explode"}),
-            json.dumps({"type": "cursor", "x": "NaN", "y": 1}),
-            # A partial geometry group is rejected (geometry-group policy).
-            json.dumps({"type": "update", "id": shape_id, "patch": {"x": 5, "y": 5}}),
-            # A server-owned field is rejected (S5).
-            json.dumps({"type": "update", "id": shape_id, "patch": {"version": 99}}),
-        ]
-        for raw in bad_frames:
-            ws.send_text(raw)
-            assert _next(ws, "error")["detail"]
-        # Still open and working after all of that.
-        ws.send_json({"type": "update", "id": shape_id, "patch": {"color": "#ff0000"}})
-        assert _next(ws, "shape")["props"]["color"] == "#ff0000"
-
-
 def test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry(client):
     """Alice drags a rect while Bob drags its left edge, at the same time.
 

@@ -97,7 +97,7 @@ async def require_canvas_member(canvas_id: UUID, user: dict = Depends(current_us
     try:
         return await check_canvas_access(canvas_id, user["id"])
     except AccessError as e:
-        raise HTTPException(status_code=e.status, detail=e.detail)
+        raise HTTPException(status_code=e.status, detail=e.detail) from None
 
 
 async def _start_session(response: Response, user_id) -> None:
@@ -158,7 +158,7 @@ async def signup(body: SignupBody, response: Response) -> dict:
         )
     except asyncpg.UniqueViolationError as e:
         field = "Email" if "email" in (e.constraint_name or "") else "Username"
-        raise HTTPException(409, f"{field} is already taken")
+        raise HTTPException(409, f"{field} is already taken") from None
     await _start_session(response, row["id"])
     return public_user(row)
 

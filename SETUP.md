@@ -42,6 +42,20 @@ The server applies `server/schema.sql` on startup (all statements are idempotent
 
 The frontend dev server proxies `/api` and `/ws` to the backend (`API_PROXY_TARGET`, default `http://localhost:3001`). The browser only ever talks to Vite, so the httpOnly session cookie is same-origin.
 
+## Running tests
+
+Tests run the real app (in-process, via httpx) against a separate `whiteboard_test` database on the same Postgres, created automatically and truncated before each test.
+
+```bash
+docker compose up -d db
+cd server
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+.venv/bin/pytest -q
+.venv/bin/ruff check app tests
+```
+
+Override the Postgres location with `TEST_ADMIN_DATABASE_URL` (defaults to the compose db on localhost:5432).
+
 ## Project structure
 
 ```

@@ -14,7 +14,7 @@
 - `server/schema.sql`: tables added; all statements idempotent.
 - `server/app/db.py`: `init_db()` retries the connection while Postgres boots, then applies `schema.sql` under an advisory lock.
 - `server/app/main.py`: lifespan calls `init_db()`; auth and canvas routers registered.
-- `server/pyproject.toml`: added `argon2-cffi`.
+- `server/pyproject.toml`: added `argon2-cffi`; dev deps `pytest`, `httpx`; pinned ruff config.
 - `docker-compose.yml`: db `pg_isready` healthcheck + `condition: service_healthy` and `restart: unless-stopped` on server (scaffold issue 2); removed the initdb schema mount (the server applies it now); replaced unused `VITE_API_URL`/`VITE_WS_URL` with `API_PROXY_TARGET` (scaffold issues 1, 3).
 - `client/vite.config.ts`: proxy target read from `API_PROXY_TARGET` (scaffold issue 1).
 - `client/package.json`: added `react-router-dom`.
@@ -56,3 +56,11 @@ Why: a late move/resize for a deleted shape can be recognised and rejected inste
 ### Invites are idempotent
 Decision: `INSERT ... ON CONFLICT DO NOTHING` on PK `(canvas_id, user_id)`; any member can invite.
 Why: EDGE_CASES C4/V8. Double-sends and inviting an existing member return 200 with no duplicate row. Granular permissions are out of scope.
+
+### Tests hit real Postgres and assert on DB rows
+Decision: pytest + httpx `ASGITransport` against a `whiteboard_test` database, truncated per test. Tests check HTTP responses *and* the resulting rows (argon2 hash stored, only sha256 of the token stored, exactly one membership row after 10 concurrent invites, session row gone after logout). anyio's bundled pytest plugin, so no pytest-asyncio.
+Alternative: mocking the DB, or SQLite.
+Why: the guarantees we rely on (unique indexes, `ON CONFLICT`, `lower()` lookups) live in Postgres, so only real Postgres can show they hold.
+Proof the tests can fail: 8 bugs injected one at a time, all caught:
+skip membership check, store raw token, ignore session expiry, logout keeps the session row, case-sensitive login, invite without `ON CONFLICT`, owner not made a member, canvas list not filtered by membership.
+Weakness: the pool is rebuilt per test (anyio uses a fresh event loop each time), which costs about 0.1s per test. The suite runs serially.

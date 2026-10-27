@@ -13,4 +13,19 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff>=0.8.0",
+    "pytest>=8.3.0",
+    "httpx>=0.28.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "UP"]
+# B008: `Depends(...)` in argument defaults is FastAPI's standard idiom.
+# UP017: we use `timezone.utc` deliberately (see CLAUDE.md).
+ignore = ["B008", "UP017"]

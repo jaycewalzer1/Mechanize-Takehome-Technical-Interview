@@ -8,3 +8,5 @@ __pycache__/
 .venv/
 *.egg-info/
 *.tsbuildinfo
+.pytest_cache/
+*.log

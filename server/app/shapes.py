@@ -35,7 +35,12 @@ def _frame(row: asyncpg.Record) -> dict:
 
 
 async def load_snapshot(canvas_id: UUID) -> tuple[int, list[dict]]:
-    """Current seq and all live shapes. Two queries, independent of shape count (P1)."""
+    """Current seq and all live shapes. Two queries, independent of shape count (P1).
+
+    Order matters: seq is read *before* the shapes, so a commit landing between the
+    two can only make the shapes newer than seq, never older. The client uses seq
+    as a floor for stale frames, so a too-high seq could hide a real change.
+    """
     pool = await get_pool()
     seq = await pool.fetchval("SELECT seq FROM canvases WHERE id = $1", canvas_id)
     rows = await pool.fetch(
@@ -80,14 +85,19 @@ async def apply_op(
         return await _modify(conn, canvas_id, seq, msg)
 
 
-async def _create(
-    conn: asyncpg.Connection, canvas_id: UUID, user_id: UUID, seq: int, msg: CreateMsg
-) -> dict | None:
+async def _check_not_full(conn: asyncpg.Connection, canvas_id: UUID) -> None:
+    # Called by create and restore, the two ops that add a live shape.
     live = await conn.fetchval(
         "SELECT count(*) FROM shapes WHERE canvas_id = $1 AND NOT deleted", canvas_id
     )
     if live >= MAX_LIVE_SHAPES:  # race-free: we hold the canvas lock
         raise OpRejected(f"Canvas is full ({MAX_LIVE_SHAPES} shapes)")
+
+
+async def _create(
+    conn: asyncpg.Connection, canvas_id: UUID, user_id: UUID, seq: int, msg: CreateMsg
+) -> dict | None:
+    await _check_not_full(conn, canvas_id)
     # Edge case: C1/I2 a retried create reuses its client UUID -> ON CONFLICT does
     # nothing (no second row, and no resurrecting a deleted shape) -> no broadcast.
     row = await conn.fetchrow(
@@ -126,6 +136,7 @@ async def _modify(
     if isinstance(msg, RestoreMsg):
         if not deleted:
             raise OpRejected("Shape is not deleted", _frame(current))
+        await _check_not_full(conn, canvas_id)
         deleted = False
     elif deleted:
         # Edge case: C3 update/delete after delete -> rejected, sender gets the

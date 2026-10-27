@@ -47,7 +47,8 @@ export default function CanvasList() {
       </form>
       {error && <div className="error">{error}</div>}
       {canvases === null ? (
-        <p>Loading…</p>
+        // Edge case: F3 a failed fetch shows its error (above) plus a retry, never an endless "Loading…".
+        error ? <button onClick={() => window.location.reload()}>Retry</button> : <p>Loading…</p>
       ) : canvases.length === 0 ? (
         <p>No canvases yet. Create one, or ask someone to invite you.</p>
       ) : (

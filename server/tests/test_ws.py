@@ -125,6 +125,12 @@ def test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry(client):
         _next(a, "snapshot")
         _next(b, "snapshot")
         a.send_json({"type": "create", "id": shape_id, "props": RECT})
+        # Wait until both have seen the create: otherwise Bob's first update can be
+        # handled before Alice's create commits, get "Shape not found" (no shape
+        # frame), and the frame count below would wait forever.
+        held_a, held_b = {}, {}
+        _apply(held_a, _next(a, "shape"))
+        _apply(held_b, _next(b, "shape"))
 
         sent = []
         steps = 30
@@ -136,9 +142,8 @@ def test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry(client):
             b.send_json({"type": "update", "id": shape_id, "patch": resize})
             sent += [drag, resize]
 
-        # Every committed op is broadcast to both sockets: 1 create + 2*steps updates.
-        held_a, held_b = {}, {}
-        for _ in range(1 + 2 * steps):
+        # Every committed update is broadcast to both sockets: 2*steps frames each.
+        for _ in range(2 * steps):
             _apply(held_a, _next(a, "shape"))
             _apply(held_b, _next(b, "shape"))
 

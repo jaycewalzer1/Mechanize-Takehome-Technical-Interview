@@ -102,7 +102,7 @@ Defined in `server/app/ws_schemas.py` (inbound validation) and `client/src/types
 | Track | Owns |
 |---|---|
 | A: backend realtime | `server/app/ws.py`, `server/app/shapes.py`, `/ws` in `main.py`, `server/tests/test_ws*.py` |
-| B: canvas editor | `client/src/canvas/*` (`Board` takes `{shapes, onOp, disabled}`, no socket) |
+| B: canvas editor | `client/src/canvas/*` (`Board` takes `{shapes, onOp, onGesture, disabled}`, no socket) |
 | C: sync, undo, cursors | `client/src/useCanvasSocket.ts`, `client/src/undo.ts`, `client/src/Cursors.tsx`, `client/src/pages/CanvasPage.tsx` |
 
 Commit only your own paths (`git add <paths>`), `git pull` before `git push`, never force-push.

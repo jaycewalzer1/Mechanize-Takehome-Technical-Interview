@@ -24,7 +24,9 @@ log = logging.getLogger(__name__)
 # S7: browsers always send Origin on a WebSocket handshake, so a cross-site page
 # can't open a socket with our cookie. A missing Origin means a non-browser client,
 # which can't ride a victim's cookie anyway.
-ALLOWED_ORIGINS = set(os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(","))
+ALLOWED_ORIGINS = set(
+    os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+)
 SEND_TIMEOUT = 2.0  # seconds; a socket slower than this is dropped (W7)
 
 
@@ -73,8 +75,11 @@ async def canvas_socket(ws: WebSocket, canvas: str = "") -> None:
     finally:
         # Edge case: W5 tab closed / network drop -> leave the room, others drop the cursor.
         room.pop(conn.peer["conn_id"], None)
-        if not room:
-            rooms.pop(canvas_id, None)
+        # Only remove the room if it's still the registered one: if this connection
+        # was dropped by _deliver and the room emptied and was replaced by a newer
+        # one, popping by key would orphan the newcomers from every broadcast.
+        if not room and rooms.get(canvas_id) is room:
+            rooms.pop(canvas_id)
         await _broadcast(canvas_id, {"type": "leave", "conn_id": conn.peer["conn_id"]})
 
 
@@ -135,8 +140,9 @@ async def _handle(canvas_id: UUID, user_id: UUID, conn: Conn, raw: str) -> None:
         if e.shape is not None:  # resync the sender's optimistic state (C3)
             await _deliver(canvas_id, conn, e.shape)
         return
-    except asyncpg.PostgresError:
-        # Edge case: W3 DB error -> the transaction already rolled back; tell the sender only.
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError):
+        # Edge case: W3 DB error (query failure, or a lost/refused connection) -> the
+        # transaction already rolled back; tell the sender only and keep the loop alive.
         log.exception("shape op failed")
         await _deliver(canvas_id, conn, _error("Server error: change not saved"))
         return

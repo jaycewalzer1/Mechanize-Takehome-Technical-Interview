@@ -2,7 +2,7 @@
 
 ## Requirements checklist
 - [x] User accounts (signup, login, logout), verified with curl via the Vite proxy
-- [x] Create a canvas, open an existing canvas (canvas page is a placeholder until phase 4)
+- [x] Create a canvas, open an existing canvas
 - [x] Invite other users by username or email
 - [ ] Shapes: rectangle, ellipse, line, text
 - [ ] Select, move, resize, delete, change color
@@ -13,12 +13,13 @@
 ## Changes to provided code
 - `server/schema.sql`: tables added; all statements idempotent.
 - `server/app/db.py`: `init_db()` retries the connection while Postgres boots, then applies `schema.sql` under an advisory lock.
-- `server/app/main.py`: lifespan calls `init_db()`; auth and canvas routers registered.
+- `server/app/main.py`: lifespan calls `init_db()`; auth, canvas and ws routers registered; the scaffold's echo `/ws` stub removed (replaced by `app/ws.py`); `typing.AsyncGenerator` import moved to `collections.abc` (ruff UP035).
 - `server/app/main.py`: the `/ws` stub replaced by the `ws` router (`app/ws.py`); `AsyncGenerator` imported from `collections.abc` (ruff UP035).
 - `server/pyproject.toml`: added `argon2-cffi`; dev deps `pytest`, `httpx`; pinned ruff config.
 - `docker-compose.yml`: db `pg_isready` healthcheck + `condition: service_healthy` and `restart: unless-stopped` on server (scaffold issue 2); removed the initdb schema mount (the server applies it now); replaced unused `VITE_API_URL`/`VITE_WS_URL` with `API_PROXY_TARGET` (scaffold issues 1, 3).
 - `client/vite.config.ts`: proxy target read from `API_PROXY_TARGET` (scaffold issue 1).
-- `client/package.json`: added `react-router-dom`.
+- `client/package.json`: added `react-router-dom` (root `package-lock.json` updated by npm workspaces to match).
+- `.gitignore`: added `*.tsbuildinfo`, `.pytest_cache/`, `*.log`.
 - `client/src/App.tsx`: router root.
 - `SETUP.md`: removed the manual `psql -f schema.sql` step.
 - Added `client/.dockerignore` / `server/.dockerignore`: without them `COPY . .` overwrote the container's node_modules with the host's (macOS) ones.
@@ -41,7 +42,7 @@ Alternative: stdlib `hashlib.scrypt` (no dependency).
 Why: argon2 is the current recommendation, and the user approved it.
 
 ### One membership check for REST and WS
-Decision: `check_canvas_access(canvas_id, user_id)` is transport-agnostic and raises `AccessError(404|403)`. `require_canvas_member` wraps it as a FastAPI dependency; the WS handshake (phase 3) will call it directly and close with 1008.
+Decision: `check_canvas_access(canvas_id, user_id)` is transport-agnostic and raises `AccessError(404|403)`. `require_canvas_member` wraps it as a FastAPI dependency; the WS handshake calls it directly and closes with 1008.
 Why: one code path for authorization, so REST and WS can't drift apart.
 
 ### Case-insensitive usernames/emails
@@ -59,7 +60,7 @@ Decision: `INSERT ... ON CONFLICT DO NOTHING` on PK `(canvas_id, user_id)`; any 
 Why: EDGE_CASES C4/V8. Double-sends and inviting an existing member return 200 with no duplicate row. Granular permissions are out of scope.
 
 ### Minimal automated testing
-Decision: no tests for auth, canvas CRUD, or invites; those are verified by hand (curl + psql), as recorded above. `server/tests/conftest.py` is kept so the few sync-path tests (convergence, no resurrection after delete, WS membership rejection) can be added in phase 3.
+Decision: no tests for auth, canvas CRUD, or invites; those are verified by hand (curl + psql), as recorded above. The few sync-path tests are listed under "Committed WS tests" below.
 Alternative: a broad suite. An earlier 37-test version, mutation-checked against 8 injected bugs, was removed (see git history, commit 5ded18a).
 Why: in a 3-hour block, tests pay off only where bugs are race-dependent and invisible in a two-browser check.
 Weakness: auth and membership regressions are caught only by manual re-checks.
@@ -71,7 +72,7 @@ Why: several people edit the same shapes at once (README). The row lock serializ
 Weakness: every op on a canvas is serialized (fine for 2-5 users at ~20 updates/s each); the in-memory room registry assumes a single server process.
 
 ### Few committed tests
-Decision: tests are written freely during development, but only the risky concurrency/realtime paths (C1, C2/C6, C3, W1, W2) are committed. Everything else is verified by hand and noted here.
+Decision: tests are written freely during development, but only the risky concurrency/realtime paths (C1, C2, C3, W1, W2) are committed. C6 (out-of-order broadcasts) is the client's version filter, verified by hand. Everything else is verified by hand and noted here.
 Why: the 3-hour limit, and every committed line has to be explained in review.
 
 ### WS handshake: accept, then close 1008
@@ -99,3 +100,9 @@ Weakness: a client on a very slow network for >2s gets dropped and reconnects.
 - `test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry`: proven once to fail under per-field geometry merging (final rect `x=130, y=130, width=130`, a right edge nobody drew). Removing the test's version filter does *not* make it fail (broadcasts arrive in commit order in TestClient), so C6 is verified by hand on the client.
 - `test_C3_update_after_delete_is_rejected_and_never_resurrects` (also C1: a duplicate create is a no-op)
 Verified by hand through the Vite proxy in Docker: snapshot, create broadcast, bad frame -> error with the socket open, foreign Origin -> 1008, no cookie -> 1008.
+
+### Supervisor review fixes (see REVIEW.md)
+- `ws.py`: a dropped connection's cleanup only removes the room if it is still the registered one (it could otherwise orphan a newer room's sockets); `InterfaceError`/`OSError` from the DB (pool reconnecting while Postgres restarts) now return an error frame instead of killing the socket (W3; verified with a throwaway test that fails on the old code); `127.0.0.1:5173` added to the default allowed origins.
+- `shapes.py`: `restore` checks the live-shape cap too, so undo/redo can't push a canvas past 2000 shapes.
+- `test_ws.py` C2: waits for the create echo before the concurrent updates. Previously ~1 in 10 runs hung: Bob's first update could be handled before Alice's create committed, get "Shape not found", and the test waited forever for a frame that never comes. 25/25 runs pass after.
+- `CanvasList.tsx`: a failed list fetch shows the error and a Retry button instead of "Loading…" forever (F3).

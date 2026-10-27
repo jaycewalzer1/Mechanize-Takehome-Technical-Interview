@@ -12,7 +12,3 @@ button:hover { background: #f0f0f0; }
 .error { color: #b91c1c; }
 .muted { color: #777; font-size: 0.9em; }
 .list { padding-left: 18px; line-height: 1.8; }
-.canvas-placeholder {
-  margin-top: 12px; height: 600px; border: 2px dashed #ccc; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center; color: #999; background: #fff;
-}

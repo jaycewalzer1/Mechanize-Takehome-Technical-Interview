@@ -41,6 +41,15 @@ export function sameGeometry(a: Record<string, number>, b: Record<string, number
 // Text size follows the box height, so resizing a text box scales its font.
 export const fontSizeFor = (height: number) => height * 0.75;
 
+// Width a text box needs to hug its text at a given height. Measured with a 2D
+// canvas in the page's font, so it matches what the SVG <text> actually draws.
+// Capped at the server's max size (10,000).
+const measureCtx = document.createElement("canvas").getContext("2d")!;
+export function textBoxWidth(text: string, height: number): number {
+  measureCtx.font = `${fontSizeFor(height)}px ${getComputedStyle(document.body).fontFamily}`;
+  return Math.min(10_000, Math.max(10, Math.ceil(measureCtx.measureText(text).width) + 4));
+}
+
 // data-id on each shape's <g> is how the Board's pointer handlers find which shape was hit.
 export function ShapeView({ id, props: p }: { id: string; props: ShapeProps }) {
   if (p.type === "line") {

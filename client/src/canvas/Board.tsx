@@ -16,6 +16,7 @@ import {
   sameGeometry,
   SelectionHandles,
   ShapeView,
+  textBoxWidth,
   type Geometry,
 } from "./shapes";
 import Toolbar, { COLORS, type Tool } from "./Toolbar";
@@ -150,12 +151,15 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     if (!ed.value.trim()) return; // the server requires 1+ chars; empty = cancel
     if (ed.id) {
       const s = shapes.find((x) => x.id === ed.id);
-      if (s?.props.type === "text" && s.props.text !== ed.value) onOp({ type: "update", id: ed.id, patch: { text: ed.value } });
+      if (s?.props.type !== "text" || s.props.text === ed.value) return;
+      // Refit the box to the new text. Geometry must go as a whole group (README
+      // conflict policy), so send x/y/height unchanged alongside the new width.
+      const { x, y, height } = s.props;
+      const width = textBoxWidth(ed.value, height);
+      onOp({ type: "update", id: ed.id, patch: { text: ed.value, x, y, width, height } });
     } else {
       const id = crypto.randomUUID();
-      // Rough width estimate so the box hugs the text; the user can resize after.
-      // Capped at the server's max size (10,000).
-      const width = Math.min(10_000, Math.max(10, Math.ceil(ed.value.length * fontSizeFor(TEXT_HEIGHT) * 0.6)));
+      const width = textBoxWidth(ed.value, TEXT_HEIGHT); // the user can resize after
       onOp({
         type: "create",
         id,
@@ -290,7 +294,9 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
   // Edge case: W9. While dragging, render the shape from the gesture's local geometry
   // on top of the latest server props. Echoes of our own earlier throttled frames
   // would otherwise make it jump back, while a peer's color change still shows.
-  const display = shapes.map((s) =>
+  // The shape being text-edited is hidden: the input draws it (same text, color and
+  // position) until the edit commits.
+  const display = shapes.filter((s) => s.id !== edit?.id).map((s) =>
     gesture && gesture.kind !== "create" && gesture.id === s.id
       ? { ...s, props: { ...s.props, ...gesture.geom } as ShapeProps }
       : s
@@ -341,7 +347,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
               <ShapeView id="draft" props={{ type: gesture.shapeType, ...gesture.geom, color } as ShapeProps} />
             </g>
           )}
-          {selectedDisplay && !disabled && <SelectionHandles props={selectedDisplay.props} />}
+          {selectedDisplay && !disabled && !edit && <SelectionHandles props={selectedDisplay.props} />}
         </svg>
         {edit && (
           <input
@@ -349,6 +355,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
             value={edit.value}
             maxLength={MAX_TEXT}
             placeholder="Type, then Enter"
+            className="text-edit"
             onChange={(e) => setEdit({ ...edit, value: e.target.value })}
             onBlur={commitText}
             onKeyDown={(e) => {
@@ -359,11 +366,12 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
               position: "absolute",
               left: edit.x,
               top: edit.y,
-              width: Math.max(160, edit.width),
+              // Grows with the text so the dashed outline always surrounds all of it.
+              width: textBoxWidth(edit.value || "Type, then Enter", edit.height),
               height: edit.height,
               fontSize: fontSizeFor(edit.height),
-              padding: "0 2px",
-              borderRadius: 2,
+              // An existing shape keeps its own color; a new one uses the picked color.
+              color: shapes.find((s) => s.id === edit.id)?.props.color ?? color,
             }}
           />
         )}

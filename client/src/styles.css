@@ -137,6 +137,16 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 /* Selection outline and resize handles (SVG elements, so fill/stroke, not background). */
+/* In-place text editor: looks like the text shape itself, with a dashed outline
+   that hugs the text instead of the usual pill input. */
+.text-edit, .text-edit:focus-visible {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
 .selection-outline { fill: none; stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
 .handle { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; cursor: pointer; }
 

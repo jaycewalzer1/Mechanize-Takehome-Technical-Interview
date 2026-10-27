@@ -108,9 +108,10 @@ function CanvasEditor({ canvasId }: { canvasId: string }) {
       if (!send(op)) return;
       if (op.type === "create" || op.type === "delete") {
         record({ kind: op.type, id: op.id });
-      } else if (op.type === "update" && before && !("x" in op.patch || "x1" in op.patch)) {
-        // Color/text edit. Geometry updates here are throttled drag frames;
-        // their single undo entry arrives through onGesture instead.
+      } else if (op.type === "update" && before && ("text" in op.patch || !("x" in op.patch || "x1" in op.patch))) {
+        // Color/text edit (a text edit also refits the box, so its undo restores both).
+        // Other geometry updates here are throttled drag frames; their single undo
+        // entry arrives through onGesture instead.
         const fields = Object.keys(op.patch) as (keyof ShapePatch)[];
         const old = Object.fromEntries(fields.map((k) => [k, (before as any)[k]])) as ShapePatch;
         record({ kind: "update", id: op.id, before: old, after: op.patch });

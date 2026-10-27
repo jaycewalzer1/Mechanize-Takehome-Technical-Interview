@@ -22,6 +22,7 @@
 - `.gitignore`: added `*.tsbuildinfo`, `.pytest_cache/`, `*.log`.
 - `client/src/App.tsx`: router root.
 - `SETUP.md`: removed the manual `psql -f schema.sql` step.
+- `client/Dockerfile`: a LIMITATION comment only (no behavior change) on the unpinned `npm install`; see REVIEW item 7.
 - `README.md`: appended run/architecture/decisions/limitations sections below the assignment text (original text unchanged).
 - Added `client/.dockerignore` / `server/.dockerignore`: without them `COPY . .` overwrote the container's node_modules with the host's (macOS) ones.
 

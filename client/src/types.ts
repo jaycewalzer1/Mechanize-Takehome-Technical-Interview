@@ -38,8 +38,12 @@ export type LineProps = {
 export type ShapeProps = BoxProps | TextProps | LineProps;
 export type ShapeType = ShapeProps["type"];
 
-// Only the fields sent are changed on the server; `type` can't change.
-export type ShapePatch = Partial<Omit<BoxProps, "type"> & Omit<TextProps, "type"> & Omit<LineProps, "type">>;
+// Geometry is written as one whole group (last write wins on the group, so a
+// concurrent drag and resize can't mix into a shape nobody drew). Color and
+// text are per field. `type` can't change. The server rejects a partial group.
+export type BoxGeometry = Pick<BoxProps, "x" | "y" | "width" | "height">;
+export type LineGeometry = Pick<LineProps, "x1" | "y1" | "x2" | "y2">;
+export type ShapePatch = (BoxGeometry | LineGeometry | {}) & { color?: string; text?: string };
 
 // A shape as the server sends it.
 export type Shape = {

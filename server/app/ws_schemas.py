@@ -8,7 +8,7 @@ pydantic.ValidationError, which the WS handler turns into an error frame
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 # Bounds keep geometry sane and frames small (EDGE_CASES V2, W12). No zoom/pan,
 # so anything past +-10000 is off any screen anyway.
@@ -69,12 +69,17 @@ ShapeProps = Annotated[BoxProps | TextProps | LineProps, Field(discriminator="ty
 shape_props_adapter: TypeAdapter[BoxProps | TextProps | LineProps] = TypeAdapter(ShapeProps)
 
 
+# Geometry fields are only ever written together, as one group (see PLAN.md).
+BOX_GEOMETRY = frozenset({"x", "y", "width", "height"})
+LINE_GEOMETRY = frozenset({"x1", "y1", "x2", "y2"})
+
+
 class ShapePatch(_Strict):
-    """A partial update. Only the fields sent are changed (LWW per field, see PLAN.md).
+    """A partial update: geometry as one whole group, color and text per field (see PLAN.md).
 
     `type` is deliberately absent, so a shape can't change kind. The server merges
     the patch onto the stored props and re-validates the result with
-    `shape_props_adapter`, which rejects e.g. `x1` on a rect.
+    `shape_props_adapter`, which rejects e.g. line endpoints on a rect.
     """
 
     x: Coord | None = None
@@ -87,6 +92,18 @@ class ShapePatch(_Strict):
     y2: Coord | None = None
     color: Color | None = None
     text: str | None = Field(default=None, min_length=1, max_length=MAX_TEXT)
+
+    @model_validator(mode="after")
+    def _geometry_is_whole_group(self) -> "ShapePatch":
+        # Why all-or-nothing: a drag sends {x, y} and a left-edge resize sends
+        # {x, width}. Merged per field, concurrent ones could combine into a
+        # shape nobody drew (drag's x + resize's width = the right edge jumps).
+        # Replacing the whole group means the result is exactly one user's write.
+        sent = self.model_fields_set
+        for group in (BOX_GEOMETRY, LINE_GEOMETRY):
+            if sent & group and not group <= sent:
+                raise ValueError(f"geometry must include all of {sorted(group)}")
+        return self
 
 
 # --- Client -> server messages ------------------------------------------------

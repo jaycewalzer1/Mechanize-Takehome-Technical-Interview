@@ -64,9 +64,9 @@ Why: in a 3-hour block, tests pay off only where bugs are race-dependent and inv
 Weakness: auth and membership regressions are caught only by manual re-checks.
 
 ### WebSocket protocol and conflict policy (PLAN.md)
-Decision: one canvas-wide `seq`, bumped under the canvas row lock for every shape op and stored as the shape's `version`. Clients ignore `shape` frames with version <= what they hold. Updates are field-level patches, last writer wins. Ops on a deleted shape are rejected; only an explicit `restore` un-deletes. Every connect gets a full snapshot.
+Decision: one canvas-wide `seq`, bumped under the canvas row lock for every shape op and stored as the shape's `version`. Clients ignore `shape` frames with version <= what they hold. Geometry (`x, y, width, height` or line endpoints) is written as one whole group, last writer wins on the group; color and text are per field. Ops on a deleted shape are rejected; only an explicit `restore` un-deletes. Every connect gets a full snapshot.
 Alternative: a per-canvas `asyncio.Lock` held across write + broadcast; CRDT/OT.
-Why: several people edit the same shapes at once (README). The row lock serializes writes in the DB and the version filter makes every client converge on the DB state, even if broadcasts arrive out of order. Patches let a concurrent move and recolor both survive.
+Why: several people edit the same shapes at once (README). The row lock serializes writes in the DB and the version filter makes every client converge on the DB state, even if broadcasts arrive out of order. Grouping geometry means a concurrent drag and left-edge resize end at exactly one user's shape, never a mix; per-field color/text lets a concurrent move and recolor both survive.
 Weakness: every op on a canvas is serialized (fine for 2-5 users at ~20 updates/s each); the in-memory room registry assumes a single server process.
 
 ### Few committed tests

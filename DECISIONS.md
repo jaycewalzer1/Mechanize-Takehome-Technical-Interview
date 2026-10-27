@@ -4,11 +4,11 @@
 - [x] User accounts (signup, login, logout), verified with curl via the Vite proxy
 - [x] Create a canvas, open an existing canvas
 - [x] Invite other users by username or email
-- [ ] Shapes: rectangle, ellipse, line, text
-- [ ] Select, move, resize, delete, change color
-- [ ] Undo / redo
-- [ ] See other users' cursors
-- [ ] Canvas state persists across sessions (tables exist; sync not built yet)
+- [x] Shapes: rectangle, ellipse, line, text (Track B, in Chrome against the Docker app)
+- [x] Select, move, resize, delete, change color (Track B, in Chrome)
+- [ ] Undo / redo (built; still needs a two-browser check by hand)
+- [x] See other users' cursors (two WS clients through the proxy on a fresh clone: cursor relayed with username, `leave` on close)
+- [x] Canvas state persists across sessions (fresh clone: create + recolor, `docker compose restart`, both users' snapshots identical, canvas still listed for the invitee)
 
 ## Changes to provided code
 - `server/schema.sql`: tables added; all statements idempotent.

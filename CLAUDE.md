@@ -12,7 +12,7 @@ Deployment context that drives design (from README): 2-5 people on a call, often
 - Schema: `server/schema.sql` is mounted into `/docker-entrypoint-initdb.d/`, so it **runs only when the `pgdata` volume is first created**. After any schema change: `docker compose down -v && docker compose up --build`.
 - Realtime: FastAPI/Starlette built-in WebSocket at `/ws` (stub in `main.py`). Vite proxies `/api` and `/ws` to the backend.
 - Already uses `lifespan` (not `@app.on_event`). `/health` is at the root, not under `/api`.
-- Python deps: fastapi, uvicorn[standard], websockets, asyncpg; dev: ruff. Pydantic v2 comes in through FastAPI (not pinned directly). **Not installed:** SQLAlchemy, bcrypt/passlib, pytest, httpx.
+- Python deps: fastapi, uvicorn[standard], websockets, asyncpg; dev: ruff. Pydantic v2 comes in through FastAPI (not pinned directly). Dev also has pytest + httpx (approved), used only for the few tests allowed under Tests. **Not installed:** SQLAlchemy, bcrypt/passlib.
 - Frontend deps: react, react-dom only. No router, no test runner. `npm run build` = `tsc -b && vite build` (strict TS).
 - README allows restructuring the scaffold and adding packages, but **not** swapping the framework or database, and no libraries that solve the core assignment (tldraw, yjs, Fabric/Konva-style canvas editors, CRDT/OT libs).
 
@@ -30,14 +30,14 @@ Deployment context that drives design (from README): 2-5 people on a call, often
 
 ## Edge cases (IMPORTANT)
 - EDGE_CASES.md is the contract for behavior under failure, concurrency, and bad input. @EDGE_CASES.md
-- For every slice: list which EDGE_CASES.md items apply, implement them, and add a test per item (name the test after the item ID, e.g. `test_C2_concurrent_move_converges`).
-- Items that can't be tested automatically (UI behavior) must be verified in the browser and reported.
+- For every slice: list which EDGE_CASES.md items apply, implement them, and verify each one manually (curl, psql, or two browsers) and report how.
+- Write an automated test for an item only if it meets the bar under Tests. Where EDGE_CASES.md says "test" (e.g. V3, S1), read it as "verify" unless the item meets that bar.
 - Never mark a slice done while an applicable item is unhandled. If an item doesn't apply, say N/A and why.
 
 ## Workflow (every task)
 1. Restate the task in 1-2 lines and name the README requirement it satisfies.
 2. Smallest change that works. One feature or fix per step.
-3. List which EDGE_CASES.md items apply; handle each and prove it (test name or browser check). N/A needs a reason.
+3. List which EDGE_CASES.md items apply; handle each and prove it (curl/psql output or browser check; a test name only for items that meet the Tests bar). N/A needs a reason.
 4. Verify before saying done (see Verification). Never claim something works without running it and showing output.
 5. Append to DECISIONS.md. Commit (`feat: create canvas endpoint with validation`), then `git push origin main`.
 6. End with: files changed, what to read first, how you verified it, known weaknesses.
@@ -55,12 +55,12 @@ Ask before: adding a dependency, restructuring files, or changing the data model
 - Only `main`. Never force-push, rebase, amend pushed commits, or rewrite history. Final push must land within 3 hours of start.
 - Only commit when the app builds and starts. If a change breaks the build and can't be fixed in a few minutes, revert it.
 - No secrets committed. Working defaults live in docker-compose.yml (already true for the DB) so a fresh clone runs with zero manual steps.
-- No scratch/debug files in the repo (use /tmp). `.gitignore` already covers node_modules, dist, .env, *.db, .DS_Store, __pycache__, .venv. Add `*.log` and `.pytest_cache/` when tests arrive.
+- No scratch/debug files in the repo (use /tmp). `.gitignore` already covers node_modules, dist, .env, *.db, .DS_Store, __pycache__, .venv. `*.log` and `.pytest_cache/` are also ignored.
 
 ## Libraries
 - Use the standard library, FastAPI, Pydantic v2, asyncpg, and React built-ins. Use what the repo already has.
 - Never add a library that does the core assignment (canvas editing, sync, undo, CRDT/OT). If one seems necessary, stop and ask: what it does, why, and the no-library alternative.
-- Dependencies likely worth asking for: `pytest` + `httpx` (backend tests; use anyio's bundled pytest plugin, so no pytest-asyncio is needed). Optional: `bcrypt`.
+- pytest + httpx are already approved (anyio's bundled pytest plugin, no pytest-asyncio). Optional: `bcrypt`.
 
 ## Stack rules
 ### Backend
@@ -103,11 +103,20 @@ Ask before: adding a dependency, restructuring files, or changing the data model
 - Comments must stay accurate; update them in the same edit as the code.
 - Backend lint: `ruff check server` (ruff is already a dev dep).
 
-## Tests
-- Business rules: write failing tests first, then implement. Include exactly-at-limit (allowed) and one-past (rejected).
-- Test against Postgres (same engine as the app): a separate `whiteboard_test` database or schema, loaded from `schema.sql`, truncated between tests. Override the pool/connection dependency.
-- Concurrency tests: N concurrent clients (`asyncio.gather` over separate connections, or threads + barrier with separate HTTP/WS clients). Assert the invariant (one membership row, convergent final state, no resurrected shapes). They must FAIL with the lock or version check removed (prove it once).
-- WS tests: Starlette `TestClient.websocket_connect` with two clients on one canvas: auth rejection, invalid frame, broadcast received by the other client, not echoed wrongly.
+## Tests (minimal by design)
+- **Default: no automated test.** Verify by hand (curl, psql, two browsers) and report the output. No tests for CRUD, validation limits, auth flows, UI, or anything a two-browser check shows directly.
+- **Write a test only when all three hold:**
+  1. A bug would silently corrupt or leak shared canvas data, or make users diverge.
+  2. A manual two-browser check can't reliably trigger it (timing/race-dependent).
+  3. It sits on the core sync path.
+- In this project that means only:
+  - server conflict resolution: concurrent edits to the same shape converge to one state
+  - an update/move arriving after a delete doesn't resurrect the shape (tombstone)
+  - a non-member's WS connection/ops are rejected and receive no canvas data
+- Keep it to roughly 3-5 tests total. Anything else needs the user's explicit OK first.
+- Infrastructure already exists in `server/tests/conftest.py`: the real app via httpx `ASGITransport`, against a `whiteboard_test` Postgres database truncated per test. Assert on DB rows, not just responses.
+- Those tests use N concurrent clients (`asyncio.gather` over separate connections, or threads + barrier with separate HTTP/WS clients). Assert the invariant (convergent final state, no resurrected shapes). They must FAIL with the lock or version check removed (prove it once).
+- WS tests use Starlette `TestClient.websocket_connect` with two clients on one canvas, and only cover the three cases above. Invalid frames, echo behavior, etc. are checked by hand.
 - Never weaken, skip, or delete a test to make it pass.
 
 ## DECISIONS.md format
@@ -123,7 +132,7 @@ Weakness: <what could break / what I'd change with more time>
 
 ## Verification
 - `docker compose up --build` from a clean state must work. After any Docker or schema change: `docker compose down -v && docker compose up --build`.
-- Backend: hit each touched endpoint with valid and invalid input (curl via `localhost:3001` or `/docs`). Send valid and invalid WS frames. Run the test suite and `ruff check server`.
+- Backend: hit each touched endpoint with valid and invalid input (curl via `localhost:3001` or `/docs`). Send valid and invalid WS frames. Inspect the affected rows with psql. Run `ruff check server` (and the few tests, if the sync path changed).
 - Frontend: `npm run build` (type check) passes. Exercise the changed flow in **two browser windows logged in as different users** on the same canvas, including the error path and a backend restart (reconnect).
 - Every endpoint returns a deliberate 4xx on bad input. Every WS message type rejects bad payloads without killing the socket. Every form shows errors instead of failing silently.
 
@@ -139,10 +148,10 @@ Weakness: <what could break / what I'd change with more time>
 Run each and report pass/fail:
 1. Fresh clone into /tmp, `docker compose up --build`, starts with no manual steps (cold DB, no race).
 2. Every item in the DECISIONS.md requirements checklist works, demonstrated with two users in two browsers.
-3. Every EDGE_CASES.md item: COVERED (test name or browser check) or N/A (reason).
+3. Every EDGE_CASES.md item: COVERED (manual check, or test name for sync-path items) or N/A (reason).
 4. Bad input to every endpoint, WS message type, and form: no 500s, no dropped sockets, no blank screens.
 5. Persistence: draw, `docker compose restart`, reopen, and everything is there.
-6. Full test suite passes; `npm run build` and `ruff check server` are clean.
+6. The few sync-path tests pass; `npm run build` and `ruff check server` are clean.
 7. `git status` clean; `git log origin/main -1` matches local.
 8. README has: how to run, architecture (incl. sync/conflict model), what's implemented, key decisions, known limitations, next steps.
 

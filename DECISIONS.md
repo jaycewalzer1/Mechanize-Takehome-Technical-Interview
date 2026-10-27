@@ -57,10 +57,8 @@ Why: a late move/resize for a deleted shape can be recognised and rejected inste
 Decision: `INSERT ... ON CONFLICT DO NOTHING` on PK `(canvas_id, user_id)`; any member can invite.
 Why: EDGE_CASES C4/V8. Double-sends and inviting an existing member return 200 with no duplicate row. Granular permissions are out of scope.
 
-### Tests hit real Postgres and assert on DB rows
-Decision: pytest + httpx `ASGITransport` against a `whiteboard_test` database, truncated per test. Tests check HTTP responses *and* the resulting rows (argon2 hash stored, only sha256 of the token stored, exactly one membership row after 10 concurrent invites, session row gone after logout). anyio's bundled pytest plugin, so no pytest-asyncio.
-Alternative: mocking the DB, or SQLite.
-Why: the guarantees we rely on (unique indexes, `ON CONFLICT`, `lower()` lookups) live in Postgres, so only real Postgres can show they hold.
-Proof the tests can fail: 8 bugs injected one at a time, all caught:
-skip membership check, store raw token, ignore session expiry, logout keeps the session row, case-sensitive login, invite without `ON CONFLICT`, owner not made a member, canvas list not filtered by membership.
-Weakness: the pool is rebuilt per test (anyio uses a fresh event loop each time), which costs about 0.1s per test. The suite runs serially.
+### Minimal automated testing
+Decision: no tests for auth, canvas CRUD, or invites; those are verified by hand (curl + psql), as recorded above. `server/tests/conftest.py` is kept so the few sync-path tests (convergence, no resurrection after delete, WS membership rejection) can be added in phase 3.
+Alternative: a broad suite. An earlier 37-test version, mutation-checked against 8 injected bugs, was removed (see git history, commit 5ded18a).
+Why: in a 3-hour block, tests pay off only where bugs are race-dependent and invisible in a two-browser check.
+Weakness: auth and membership regressions are caught only by manual re-checks.

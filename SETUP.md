@@ -44,7 +44,7 @@ The frontend dev server proxies `/api` and `/ws` to the backend (`API_PROXY_TARG
 
 ## Running tests
 
-Tests run the real app (in-process, via httpx) against a separate `whiteboard_test` database on the same Postgres, created automatically and truncated before each test.
+Automated tests are kept to the few sync-path cases where a bug would be race-dependent and hard to see manually. They run the real app (in-process, via httpx) against a separate `whiteboard_test` database, created automatically and truncated before each test.
 
 ```bash
 docker compose up -d db

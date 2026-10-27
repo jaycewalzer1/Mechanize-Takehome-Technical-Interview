@@ -6,7 +6,7 @@
 - [x] Invite other users by username or email
 - [x] Shapes: rectangle, ellipse, line, text (Track B, in Chrome against the Docker app)
 - [x] Select, move, resize, delete, change color (Track B, in Chrome)
-- [ ] Undo / redo (built; still needs a two-browser check by hand)
+- [x] Undo / redo (two browsers, two users: U2 my undo overwrites B's later move (LWW), U3 undo of a create someone deleted is skipped silently, U4 undo of a delete restores the same id, U6 a new edit clears redo)
 - [x] See other users' cursors (two WS clients through the proxy on a fresh clone: cursor relayed with username, `leave` on close)
 - [x] Canvas state persists across sessions (fresh clone: create + recolor, `docker compose restart`, both users' snapshots identical, canvas still listed for the invitee)
 
@@ -72,7 +72,7 @@ Why: several people edit the same shapes at once (README). The row lock serializ
 Weakness: every op on a canvas is serialized (fine for 2-5 users at ~20 updates/s each); the in-memory room registry assumes a single server process.
 
 ### Few committed tests
-Decision: tests are written freely during development, but only the risky concurrency/realtime paths (C1, C2, C3, W1, W2) are committed. C6 (out-of-order broadcasts) is the client's version filter, verified by hand. Everything else is verified by hand and noted here.
+Decision: tests are written freely during development, but only the risky concurrency/realtime paths (C1, C2, C3, W1, W2) are committed. C6 (out-of-order broadcasts) is covered only by code review of the client's version filter (`applyFrame` in `useCanvasSocket.ts`): out-of-order delivery can't be forced from a browser or from TestClient. LIMITATION: no automated proof; with more time, unit-test `applyFrame` with frames fed in reverse commit order. Everything else is verified by hand and noted here.
 Why: the 3-hour limit, and every committed line has to be explained in review.
 
 ### WS handshake: accept, then close 1008
@@ -97,7 +97,7 @@ Weakness: a client on a very slow network for >2s gets dropped and reconnects.
 ### Committed WS tests (server/tests/test_ws.py)
 - `test_W1_handshake_rejects_no_session_and_non_member`
 - `test_W2_bad_frames_get_error_and_socket_stays_open` (non-JSON, unknown type, NaN, partial geometry, `version` field)
-- `test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry`: proven once to fail under per-field geometry merging (final rect `x=130, y=130, width=130`, a right edge nobody drew). Removing the test's version filter does *not* make it fail (broadcasts arrive in commit order in TestClient), so C6 is verified by hand on the client.
+- `test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry`: proven once to fail under per-field geometry merging (final rect `x=130, y=130, width=130`, a right edge nobody drew). Removing the test's version filter does *not* make it fail (broadcasts arrive in commit order in TestClient), so C6 is covered only by code review of the client's version filter (`applyFrame` in `useCanvasSocket.ts`): out-of-order delivery can't be forced from a browser or from TestClient. LIMITATION: no automated proof; with more time, unit-test `applyFrame` with frames fed in reverse commit order.
 - `test_C3_update_after_delete_is_rejected_and_never_resurrects` (also C1: a duplicate create is a no-op)
 Verified by hand through the Vite proxy in Docker: snapshot, create broadcast, bad frame -> error with the socket open, foreign Origin -> 1008, no cookie -> 1008.
 
@@ -106,3 +106,6 @@ Verified by hand through the Vite proxy in Docker: snapshot, create broadcast, b
 - `shapes.py`: `restore` checks the live-shape cap too, so undo/redo can't push a canvas past 2000 shapes.
 - `test_ws.py` C2: waits for the create echo before the concurrent updates. Previously ~1 in 10 runs hung: Bob's first update could be handled before Alice's create committed, get "Shape not found", and the test waited forever for a frame that never comes. 25/25 runs pass after.
 - `CanvasList.tsx`: a failed list fetch shows the error and a Retry button instead of "Loading…" forever (F3).
+
+### Two-browser verification (latest main, Docker)
+User A on localhost:5173, user B on 127.0.0.1:5173. W6: `docker compose stop server` -> "Reconnecting… editing is paused", B's Delete while offline blocked -> reconnect after ~7.6s; a color changed directly in the DB while the server was down showed in both tabs (snapshot refetch). S2/S3: after logout, reopening the canvas redirects to /login and the old cookie gets 401. Signup shows field errors; invite matches case-insensitively.

@@ -55,8 +55,8 @@ export default function CanvasList() {
         <ul className="list">
           {canvases.map((c) => (
             <li key={c.id}>
-              <Link to={`/canvas/${c.id}`}>{c.name}</Link>
-              <span className="muted"> · owner {c.owner} · updated {new Date(c.updated_at).toLocaleString()}</span>
+              <Link to={`/canvas/${c.id}`} className="pill-link">{c.name}</Link>
+              <span className="muted meta">owner {c.owner} · updated {new Date(c.updated_at).toLocaleString()}</span>
             </li>
           ))}
         </ul>

@@ -33,7 +33,7 @@ export default function CanvasPage() {
         {error.status !== 403 && error.status !== 404 && (
           <p><button onClick={() => window.location.reload()}>Retry</button></p>
         )}
-        <Link to="/">← Back to canvases</Link>
+        <Link to="/" className="pill-link">← Back to canvases</Link>
       </div>
     );
   }
@@ -42,7 +42,7 @@ export default function CanvasPage() {
   return (
     <div className="page">
       <header className="row">
-        <Link to="/">← Canvases</Link>
+        <Link to="/" className="pill-link">← Canvases</Link>
         <h1>{canvas.name}</h1>
       </header>
       <section className="row">
@@ -164,7 +164,7 @@ function CanvasEditor({ canvasId }: { canvasId: string }) {
 
   return (
     <>
-      <div className="muted">
+      <div className={socket.status === "open" ? "status live" : "status"}>
         {socket.status === "open" ? "Live" : socket.status === "connecting" ? "Connecting…" : "Reconnecting… editing is paused"}
       </div>
       {error && <div className="error">{error}</div>}

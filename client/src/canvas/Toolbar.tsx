@@ -7,7 +7,9 @@ const TOOLS: Tool[] = ["select", "rect", "ellipse", "line", "text"];
 // A fixed palette instead of <input type="color">: the native picker fires a change
 // on every hue it passes through, which would send dozens of updates (and undo
 // entries) for one recolor. A swatch click is exactly one op.
-export const COLORS = ["#1f2937", "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
+// Pastels dark enough to stay visible as strokes on the paper board; the first
+// (soft charcoal) is the default, so text shapes stay readable.
+export const COLORS = ["#4a4a5a", "#f08a8a", "#f6b26b", "#7ccba2", "#7fb5ee", "#a99bea", "#f29cc3"];
 
 export default function Toolbar(props: {
   tool: Tool;

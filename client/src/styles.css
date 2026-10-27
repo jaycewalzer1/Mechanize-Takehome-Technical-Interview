@@ -1,32 +1,26 @@
-/* Global styles: the "Drafting Table" theme (light paper, dark blueprint) plus
-   the few layout helpers the pages share. Components use these classes and
-   variables instead of hardcoded colors, so the theme is changed here only. */
+/* Global styles: a light, papery theme with pastel accents, plus the few layout
+   helpers the pages share. Components use these classes and variables instead
+   of hardcoded colors, so the theme is changed here only. Light only, on
+   purpose: the board is "paper", and shape colors are stored data picked for a
+   light background. */
 
 /* ---- Theme tokens ---------------------------------------------------------- */
 :root {
-  --bg: #FAF8F3;      /* paper: page and board background */
-  --grid: #DCE4EE;    /* faint blue grid lines on the board */
-  --ink: #2B2B2B;     /* default text */
-  --muted: #6B6B6B;   /* secondary text */
-  --border: #E4E0D6;  /* panel, toolbar and input edges */
+  color-scheme: light; /* keeps native inputs/scrollbars light even in OS dark mode */
+  --bg: #F7F1E6;      /* warm paper: page background */
+  --paper: #FFFDF9;   /* the board and cards: brighter than the page so they stand out */
+  --outline: #DCD1BE; /* the board's edge: a visible pencil line, darker than --border */
+  --grid: #E6ECF5;    /* faint blue grid lines on the board */
+  --ink: #3A3A44;     /* default text: soft charcoal, not pure black */
+  --muted: #8A8794;   /* secondary text */
+  --border: #ECE5D8;  /* panel, card and input edges */
   --panel: #FFFFFF;   /* toolbar and button background */
-  --accent: #2F5D8A;  /* active tool, selection, links, focus ring */
-  --danger: #B3261E;  /* error text; a token so it stays readable in dark mode */
-}
-
-/* Dark mode follows the OS setting: a blueprint look with the same token names,
-   so no component needs to know which mode is active. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12304F;
-    --grid: rgba(255, 255, 255, 0.08);
-    --ink: #EAF1F8;
-    --muted: #9FB3C8;
-    --border: rgba(255, 255, 255, 0.15);
-    --panel: #173A5E;
-    --accent: #8FC1FF;
-    --danger: #FF8A80;
-  }
+  --accent: #6C63C9;  /* active tool, selection, links, focus ring (lavender ink) */
+  --accent-soft: #ECE9FB; /* pastel fill behind the active tool and hovered buttons */
+  --live: #DDF3E4;    /* pastel mint: "Live" status pill */
+  --waiting: #FDEBD3; /* pastel peach: "Connecting/Reconnecting" status pill */
+  --danger: #C2413A;  /* error text: muted red, still readable on paper */
+  --shadow: 0 1px 3px rgba(60, 50, 30, 0.08); /* warm, barely-there shadow */
 }
 
 /* ---- Base elements --------------------------------------------------------- */
@@ -37,53 +31,109 @@ body {
   color: var(--ink);
   background: var(--bg);
 }
-a { color: var(--accent); }
+h1 { font-weight: 600; letter-spacing: -0.01em; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
 input, button {
   font: inherit;
   color: var(--ink);
-  padding: 6px 10px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 999px; /* pill shapes read softer and more playful than boxes */
   background: var(--panel);
 }
 input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* The one animation the theme allows: a 150ms hover fade. */
 button { cursor: pointer; transition: background-color 150ms, border-color 150ms; }
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---- Layout helpers -------------------------------------------------------- */
 .page { padding: 16px 24px; max-width: 1100px; margin: 0 auto; }
-.page.narrow { max-width: 360px; margin-top: 10vh; }
-.stack { display: flex; flex-direction: column; gap: 8px; }
+/* The login/signup form sits on a paper card in the middle of the page. */
+.page.narrow {
+  max-width: 380px;
+  margin-top: 10vh;
+  padding: 24px 28px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+.stack { display: flex; flex-direction: column; gap: 10px; }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+/* Wide enough that placeholders like "Invite by username or email" aren't cut off
+   (rem, so it still fits when the browser's font size is larger). */
+.row input { min-width: 17rem; }
 .spacer { flex: 1; }
 .error { color: var(--danger); }
 .muted { color: var(--muted); font-size: 0.9em; }
-.list { padding-left: 18px; line-height: 1.8; }
+
+/* Canvas list: each canvas is a small paper card instead of a bullet. */
+.list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+/* Owner and last-updated time, pushed to the right end of the row. */
+.list .meta { margin-left: auto; text-align: right; }
+
+/* Navigation links that act like buttons ("← Canvases", a canvas name in the
+   list): a pastel pill, so they look clickable instead of like plain text. */
+.pill-link {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 150ms, border-color 150ms;
+}
+.pill-link:hover { border-color: var(--accent); text-decoration: none; }
 
 /* ---- Editor chrome --------------------------------------------------------- */
 .toolbar {
   padding: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
-/* The selected tool: accent border and text, so it reads in both modes. */
-.tool.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+/* The selected tool: pastel fill with accent border and text. */
+.tool.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+/* Connection status as a small pastel pill (mint when live, peach otherwise). */
+.status {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8em;
+  background: var(--waiting);
+}
+.status.live { background: var(--live); }
 
 /* The board <svg>: paper with a 24px grid, drawn by two 1px gradients (one
    vertical line, one horizontal line per tile). Shapes draw on top of it. */
 .board {
   display: block;
-  background-color: var(--bg);
+  background-color: var(--paper);
   background-image:
     linear-gradient(to right, var(--grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
   background-size: 24px 24px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1.5px solid var(--outline);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 
 /* Selection outline and resize handles (SVG elements, so fill/stroke, not background). */

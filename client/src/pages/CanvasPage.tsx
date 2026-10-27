@@ -12,9 +12,6 @@ export default function CanvasPage() {
   const { id } = useParams();
   const [canvas, setCanvas] = useState<any>(null);
   const [error, setError] = useState<any>(null);
-  const [invitee, setInvitee] = useState("");
-  const [inviteMsg, setInviteMsg] = useState("");
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let ignore = false; // a stale response for a previous id must not overwrite this one
@@ -27,22 +24,6 @@ export default function CanvasPage() {
       ignore = true;
     };
   }, [id]);
-
-  const invite = async (e: any) => {
-    e.preventDefault();
-    setInviteMsg("");
-    setBusy(true);
-    try {
-      const { members } = await api(`/canvases/${id}/members`, { body: { identifier: invitee } });
-      setCanvas((c: any) => ({ ...c, members }));
-      setInviteMsg(`Invited ${invitee}`);
-      setInvitee("");
-    } catch (err: any) {
-      setInviteMsg(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   if (error) {
     return (
@@ -63,15 +44,44 @@ export default function CanvasPage() {
       <section className="row">
         <span>Members: {canvas.members.map((m: any) => m.username).join(", ")}</span>
         <span className="spacer" />
-        <form onSubmit={invite} className="row">
-          <input placeholder="Invite by username or email" value={invitee} onChange={(e) => setInvitee(e.target.value)} required />
-          <button disabled={busy}>Invite</button>
-        </form>
+        <InviteForm canvasId={canvas.id} onMembers={(members) => setCanvas((c: any) => ({ ...c, members }))} />
       </section>
-      {inviteMsg && <div className="muted">{inviteMsg}</div>}
       {/* key: a different canvas gets a fresh socket, undo history and cursors (R2). */}
       <CanvasEditor key={canvas.id} canvasId={canvas.id} />
     </div>
+  );
+}
+
+// Its own component so the input's state lives here: each keystroke re-renders
+// only this form, not the page and the Board with every shape (measured ~7ms per
+// keystroke at 1000 shapes before the move).
+function InviteForm({ canvasId, onMembers }: { canvasId: string; onMembers: (members: any[]) => void }) {
+  const [invitee, setInvitee] = useState("");
+  const [inviteMsg, setInviteMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const invite = async (e: any) => {
+    e.preventDefault();
+    setInviteMsg("");
+    setBusy(true);
+    try {
+      const { members } = await api(`/canvases/${canvasId}/members`, { body: { identifier: invitee } });
+      onMembers(members);
+      setInviteMsg(`Invited ${invitee}`);
+      setInvitee("");
+    } catch (err: any) {
+      setInviteMsg(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={invite} className="row">
+      <input placeholder="Invite by username or email" value={invitee} onChange={(e) => setInvitee(e.target.value)} required />
+      <button disabled={busy}>Invite</button>
+      {inviteMsg && <span className="muted">{inviteMsg}</span>}
+    </form>
   );
 }
 

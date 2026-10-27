@@ -70,7 +70,7 @@ export function useUndo(send: (op: ClientMessage) => boolean, isLive: (id: strin
         const op = toOp(entry);
         // `restore` only makes sense on a shape that isn't live; delete/update only on a live one.
         // Edge case: U3 someone else deleted (or restored) the shape -> skip silently and drop
-        // the entry, so the keypress undoes my next action instead of doing nothing.
+        // the entry, so the click undoes my next action instead of doing nothing.
         if ((op.type === "restore") === isLive(op.id)) continue;
         // Disconnected (W6): put the entry back, so the action isn't lost from history.
         if (!send(op)) {

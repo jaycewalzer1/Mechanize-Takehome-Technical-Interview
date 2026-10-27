@@ -27,9 +27,6 @@ You need a running PostgreSQL instance. The default connection string is `postgr
 # Start Postgres (if you don't have one running)
 docker compose up db
 
-# Initialize the database schema
-psql postgres://whiteboard:whiteboard@localhost:5432/whiteboard -f server/schema.sql
-
 # Install and start the backend
 cd server
 pip install -e .
@@ -41,7 +38,9 @@ npm install
 npm run dev
 ```
 
-The frontend dev server proxies `/api` and `/ws` to the backend at `localhost:3001`.
+The server applies `server/schema.sql` on startup (all statements are idempotent), so schema changes never need a volume wipe.
+
+The frontend dev server proxies `/api` and `/ws` to the backend (`API_PROXY_TARGET`, default `http://localhost:3001`). The browser only ever talks to Vite, so the httpOnly session cookie is same-origin.
 
 ## Project structure
 
@@ -55,7 +54,7 @@ The frontend dev server proxies `/api` and `/ws` to the backend at `localhost:30
 │   ├── app/
 │   │   ├── db.py       # Postgres connection pool (asyncpg)
 │   │   └── main.py     # FastAPI app, HTTP routes, WebSocket endpoint
-│   └── schema.sql      # Database schema (runs on first Postgres start)
+│   └── schema.sql      # Idempotent schema, applied by the server on every startup
 └── docker-compose.yml
 ```
 

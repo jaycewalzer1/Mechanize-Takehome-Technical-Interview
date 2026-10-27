@@ -9,7 +9,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./server/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whiteboard -d whiteboard"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   server:
     build: ./server
@@ -18,15 +22,20 @@ services:
     environment:
       DATABASE_URL: postgres://whiteboard:whiteboard@db:5432/whiteboard
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   client:
     build: ./client
     ports:
       - "5173:5173"
     environment:
-      VITE_WS_URL: ws://localhost:3001
-      VITE_API_URL: http://localhost:3001
+      # The browser always talks to Vite (same origin, so the session cookie
+      # just works); Vite proxies /api and /ws to the server container.
+      API_PROXY_TARGET: http://server:3001
+    depends_on:
+      - server
 
 volumes:
   pgdata:

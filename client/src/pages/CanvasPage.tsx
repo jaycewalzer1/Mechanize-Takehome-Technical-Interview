@@ -29,6 +29,10 @@ export default function CanvasPage() {
     return (
       <div className="page">
         <p className="error">{error.status === 403 ? "You don't have access to this canvas." : error.message}</p>
+        {/* Edge case: F3 a server/network failure gets a retry; 403/404 won't change on retry. */}
+        {error.status !== 403 && error.status !== 404 && (
+          <p><button onClick={() => window.location.reload()}>Retry</button></p>
+        )}
         <Link to="/">← Back to canvases</Link>
       </div>
     );
@@ -175,6 +179,10 @@ function CanvasEditor({ canvasId }: { canvasId: string }) {
           const r = e.currentTarget.getBoundingClientRect();
           sendCursor(Math.round(e.clientX - r.left), Math.round(e.clientY - r.top));
         }}
+        // Leaving the board would otherwise freeze my cursor at the edge on everyone
+        // else's screen. A point off the overlay (which clips with overflow: hidden)
+        // hides it without a new message type; the next move brings it back.
+        onPointerLeave={() => sendCursor(-100, -100)}
       >
         <Board shapes={socket.shapes} onOp={onOp} onGesture={onGesture} disabled={socket.status !== "open"} />
         <Cursors subscribe={socket.subscribePeers} />

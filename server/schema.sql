@@ -53,3 +53,14 @@ CREATE TABLE IF NOT EXISTS shapes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS shapes_canvas_id ON shapes (canvas_id);
+
+-- Edge case: V2 defense in depth. Pydantic validates every write, but the DB also
+-- refuses a shape with an unknown type or a malformed color. Constraints have no
+-- ADD ... IF NOT EXISTS, so the duplicate error is swallowed to stay idempotent.
+DO $$ BEGIN
+    ALTER TABLE shapes ADD CONSTRAINT shapes_props_valid CHECK (
+        props->>'type' IN ('rect', 'ellipse', 'line', 'text')
+        AND props->>'color' ~ '^#[0-9a-fA-F]{6}$'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

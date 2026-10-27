@@ -6,6 +6,8 @@ export class ApiError extends Error {
   }
 }
 
+export const SESSION_EXPIRED = "session-expired";
+
 // All requests go through the Vite proxy (same origin), so the httpOnly
 // session cookie is sent automatically.
 export async function api(path: string, opts: { method?: string; body?: any } = {}): Promise<any> {
@@ -17,7 +19,13 @@ export async function api(path: string, opts: { method?: string; body?: any } = 
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    let msg = data?.detail ?? res.statusText;
+    // Edge case: S2 a 401 outside /auth/* means the session expired or was logged out
+    // in another tab. AuthProvider listens for this and drops the user, so RequireAuth
+    // sends us to login. (/auth/login's 401 is just a wrong password.)
+    if (res.status === 401 && !path.startsWith("/auth/")) window.dispatchEvent(new Event(SESSION_EXPIRED));
+    // Edge case: F4 a non-JSON error body (e.g. a proxy 502 page) has no detail, and
+    // statusText can be empty, so fall back to the status code: never a blank error.
+    let msg = data?.detail ?? (res.statusText || `Request failed (${res.status})`);
     if (Array.isArray(msg)) msg = msg.map((d: any) => d.msg).join(", ");
     throw new ApiError(res.status, String(msg));
   }

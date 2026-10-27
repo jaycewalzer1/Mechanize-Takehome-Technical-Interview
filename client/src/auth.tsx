@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { api, ApiError } from "./api";
+import { api, ApiError, SESSION_EXPIRED } from "./api";
 
 type AuthState = {
   user: any | null;
@@ -22,6 +22,13 @@ export function AuthProvider({ children }: { children: any }) {
         if (!(e instanceof ApiError && e.status === 401)) console.error(e);
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Edge case: S2 any API call that finds the session gone logs us out here (see api.ts).
+  useEffect(() => {
+    const expire = () => setUser(null);
+    window.addEventListener(SESSION_EXPIRED, expire);
+    return () => window.removeEventListener(SESSION_EXPIRED, expire);
   }, []);
 
   const logout = async () => {

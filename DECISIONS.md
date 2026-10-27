@@ -11,7 +11,7 @@
 - [x] Canvas state persists across sessions (fresh clone: create + recolor, `docker compose restart`, both users' snapshots identical, canvas still listed for the invitee)
 
 ## Changes to provided code
-- `server/schema.sql`: tables added; all statements idempotent.
+- `server/schema.sql`: tables added; all statements idempotent; a `shapes_props_valid` CHECK (known type, `#rrggbb` color) added in a DO block that ignores the duplicate error.
 - `server/app/db.py`: `init_db()` retries the connection while Postgres boots, then applies `schema.sql` under an advisory lock.
 - `server/app/main.py`: lifespan calls `init_db()`; auth, canvas and ws routers registered; the scaffold's echo `/ws` stub removed (replaced by `app/ws.py`); `typing.AsyncGenerator` import moved to `collections.abc` (ruff UP035).
 - `server/app/main.py`: the `/ws` stub replaced by the `ws` router (`app/ws.py`); `AsyncGenerator` imported from `collections.abc` (ruff UP035).
@@ -111,3 +111,22 @@ Verified by hand through the Vite proxy in Docker: snapshot, create broadcast, b
 
 ### Two-browser verification (latest main, Docker)
 User A on localhost:5173, user B on 127.0.0.1:5173. W6: `docker compose stop server` -> "Reconnecting… editing is paused", B's Delete while offline blocked -> reconnect after ~7.6s; a color changed directly in the DB while the server was down showed in both tabs (snapshot refetch). S2/S3: after logout, reopening the canvas redirects to /login and the old cookie gets 401. Signup shows field errors; invite matches case-insensitively.
+
+### Zero-size shapes are discarded client-side (V5)
+Decision: a draw smaller than 2px (a click without a drag) creates nothing, and the
+server's schema rejects width/height < 1 as a backstop.
+Alternative: enforce a minimum size, which would leave stray dots on every misclick.
+Why: in a fast design review, accidental clicks are common; silently dropping them is least surprising.
+
+### Edge-case audit fixes
+- S2: a 401 from any non-auth REST call fires a `session-expired` event that
+  AuthProvider turns into a logout, so RequireAuth redirects to login (before, the
+  page just showed "Not logged in" until a refresh).
+- F4: an error with no JSON detail and an empty statusText shows "Request failed (<status>)", never a blank message.
+- F3: the canvas page's error screen has a Retry button for server/network failures.
+- Cursors: leaving the board sends an off-board cursor position, so other users don't
+  see it frozen at the edge. No new message type: the overlay clips it.
+- V2: DB CHECK `shapes_props_valid` (known type, `#rrggbb` color) as defense in depth behind Pydantic.
+Not changed: the brief snap-back after a drag ends (echoes of in-flight drag frames,
+at most one round trip, invisible on localhost) would need per-shape tracking of
+unconfirmed ops in the sync core. LIMITATION.

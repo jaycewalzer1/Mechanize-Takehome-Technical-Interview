@@ -22,15 +22,19 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture
-async def conn():
-    """Fresh schema + empty tables; yields a raw connection for asserting on DB rows."""
+async def ensure_test_db() -> None:
     admin = await asyncpg.connect(ADMIN_URL)
     try:
         if not await admin.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", TEST_DB):
             await admin.execute(f'CREATE DATABASE "{TEST_DB}"')
     finally:
         await admin.close()
+
+
+@pytest.fixture
+async def conn():
+    """Fresh schema + empty tables; yields a raw connection for asserting on DB rows."""
+    await ensure_test_db()
 
     # anyio gives each test its own event loop, and an asyncpg pool is bound to
     # the loop it was created on, so build the app's pool per test.

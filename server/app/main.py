@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 
-from app import auth, canvases
+from app import auth, canvases, ws
 from app.db import close_pool, get_pool, init_db
 
 
@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(canvases.router)
+app.include_router(ws.router)
 
 
 @app.get("/health")
@@ -26,13 +27,3 @@ async def health() -> dict:
         await conn.fetchval("SELECT 1")
     return {"ok": True}
 
-
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket) -> None:
-    await ws.accept()
-    try:
-        while True:
-            data = await ws.receive_text()
-            # Handle incoming messages
-    except WebSocketDisconnect:
-        pass

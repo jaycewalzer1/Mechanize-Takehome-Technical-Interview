@@ -14,6 +14,7 @@
 - `server/schema.sql`: tables added; all statements idempotent.
 - `server/app/db.py`: `init_db()` retries the connection while Postgres boots, then applies `schema.sql` under an advisory lock.
 - `server/app/main.py`: lifespan calls `init_db()`; auth and canvas routers registered.
+- `server/app/main.py`: the `/ws` stub replaced by the `ws` router (`app/ws.py`); `AsyncGenerator` imported from `collections.abc` (ruff UP035).
 - `server/pyproject.toml`: added `argon2-cffi`; dev deps `pytest`, `httpx`; pinned ruff config.
 - `docker-compose.yml`: db `pg_isready` healthcheck + `condition: service_healthy` and `restart: unless-stopped` on server (scaffold issue 2); removed the initdb schema mount (the server applies it now); replaced unused `VITE_API_URL`/`VITE_WS_URL` with `API_PROXY_TARGET` (scaffold issues 1, 3).
 - `client/vite.config.ts`: proxy target read from `API_PROXY_TARGET` (scaffold issue 1).
@@ -72,3 +73,29 @@ Weakness: every op on a canvas is serialized (fine for 2-5 users at ~20 updates/
 ### Few committed tests
 Decision: tests are written freely during development, but only the risky concurrency/realtime paths (C1, C2/C6, C3, W1, W2) are committed. Everything else is verified by hand and noted here.
 Why: the 3-hour limit, and every committed line has to be explained in review.
+
+### WS handshake: accept, then close 1008
+Decision: `/ws` accepts the socket, runs the checks (Origin, session cookie, canvas membership), and on failure closes with 1008 and a reason, before joining the room or sending any data.
+Alternative: close before accept.
+Why: a pre-accept close reaches the browser as a generic 1006, indistinguishable from "server down", so the client couldn't tell "log in again" apart from "reconnect".
+Weakness: an unauthenticated client briefly holds an open socket (a few ms).
+
+### Snapshot vs concurrent broadcasts
+Decision: a new connection joins the room *before* the snapshot query; broadcasts that arrive while the snapshot is loading are buffered on the connection and sent right after it.
+Why: joining after the query could miss a change committed in between; sending those broadcasts before the (older) snapshot would let the snapshot overwrite them on the client.
+
+### Membership rechecked on every op
+Decision: the `UPDATE canvases SET seq = seq + 1` that takes the canvas lock also requires a `canvas_members` row (one query).
+Why: EDGE_CASES S1, at no extra round trip.
+
+### Broadcast fan-out
+Decision: sends run concurrently (`asyncio.gather`) with a 2s timeout each; a failed or slow socket is removed from the room and closed with 1011, so its client reconnects and resyncs from a snapshot.
+Why: W7: one dead tab must not stall the room. This is the one place the code catches a broad `Exception`: any send failure means the same thing.
+Weakness: a client on a very slow network for >2s gets dropped and reconnects.
+
+### Committed WS tests (server/tests/test_ws.py)
+- `test_W1_handshake_rejects_no_session_and_non_member`
+- `test_W2_bad_frames_get_error_and_socket_stays_open` (non-JSON, unknown type, NaN, partial geometry, `version` field)
+- `test_C2_drag_vs_left_edge_resize_converges_to_one_users_geometry`: proven once to fail under per-field geometry merging (final rect `x=130, y=130, width=130`, a right edge nobody drew). Removing the test's version filter does *not* make it fail (broadcasts arrive in commit order in TestClient), so C6 is verified by hand on the client.
+- `test_C3_update_after_delete_is_rejected_and_never_resurrects` (also C1: a duplicate create is a no-op)
+Verified by hand through the Vite proxy in Docker: snapshot, create broadcast, bad frame -> error with the socket open, foreign Origin -> 1008, no cookie -> 1008.

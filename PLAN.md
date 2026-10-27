@@ -112,8 +112,10 @@ Commit only your own paths (`git add <paths>`), `git pull` before `git push`, ne
   scratchpad or /tmp, not the repo) to probe edge cases and break your own code.
 - **What gets committed**: only a small set of tests for the parts of the architecture
   that are sensitive and likely to regress:
-  - two users editing the same shape at once converge to the DB state (C2/C6); this
-    test must fail with the version filter or the canvas lock removed (prove it once)
+  - two users editing the same shape at once converge to the DB state (C2). Note:
+    in TestClient, broadcasts happen to arrive in commit order, so removing the
+    test's version filter does **not** make it fail. The out-of-order case (C6) is
+    the client's filter, verified by hand in Track C.
   - concurrent drag vs left-edge resize of one shape ends at exactly one user's
     geometry, never a mix (geometry group policy)
   - no resurrection: an update after a delete is rejected (C3)

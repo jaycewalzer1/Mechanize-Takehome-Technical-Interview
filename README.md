@@ -80,7 +80,7 @@ Use whatever AI tools you like. We recommend that you use frontier AI coding mod
 
 # Submission
 
-Everything above this line is the original assignment, unchanged. Below: how to run the whiteboard, how it works, and what it doesn't do. Detailed decisions are in [DECISIONS.md](DECISIONS.md), the protocol contract in [PLAN.md](PLAN.md), and the failure/concurrency contract in [EDGE_CASES.md](EDGE_CASES.md).
+Everything above this line is the original assignment, unchanged. Below: how to run the whiteboard, how it works, and what it doesn't do. The failure/concurrency contract the code is built against is [EDGE_CASES.md](EDGE_CASES.md).
 
 ## How to run
 
@@ -107,7 +107,7 @@ Open http://localhost:5173, sign up, create a canvas, and invite a second user b
 | Other users' cursors, with names | `client/src/Cursors.tsx` |
 | Persistence across sessions | Postgres; every edit is committed before it's broadcast |
 
-Each row was verified by hand in two browsers as two different users (see the checklist in DECISIONS.md).
+Each row was verified by hand in two browsers as two different users. See also [How it was verified](#how-it-was-verified).
 
 ## Architecture
 
@@ -139,15 +139,40 @@ This is the part that matters most for the deployment context (2-5 people editin
 8. **Undo is per user and goes through the same path.** An undo is sent as a normal edit, the inverse of my own op (create↔delete/restore, update -> the previous values). So it's validated, locked, versioned and broadcast like anything else. Undoing a move that someone else moved afterward applies my inverse as a new last write. Undoing something on a shape someone else deleted is skipped silently. A new edit clears redo. A drag is one undo entry.
 9. **Drags stream.** About 20 updates/s, each persisted, plus a final one on release. Cursors are about 25/s, relayed to others only, and never stored.
 
-## Key decisions
+## WebSocket protocol
 
-Full reasoning, alternatives and weaknesses are in [DECISIONS.md](DECISIONS.md). The short version:
+`GET /ws?canvas=<uuid>`. Inbound frames are validated by `server/app/ws_schemas.py`; the TypeScript mirror is `client/src/types.ts`.
+
+| Client -> server | Server effect |
+|---|---|
+| `create {id, props}` | insert; the same id again is a no-op |
+| `update {id, patch}` | merge the patch (whole geometry group, or color/text) onto props, re-validate, write |
+| `delete {id}` | set `deleted = true` (tombstone) |
+| `restore {id}` | set `deleted = false`, props unchanged (undo of a delete, redo of a create) |
+| `cursor {x, y}` | relay to the others only, nothing stored |
+
+| Server -> client | When |
+|---|---|
+| `snapshot {seq, you, shapes}` | first frame on every (re)connect |
+| `shape {id, props, version, deleted}` | after a shape op commits, to everyone including the sender |
+| `cursor {conn_id, user_id, username, x, y}` | another connection moved its pointer |
+| `leave {conn_id}` | a connection closed (drop its cursor) |
+| `error {detail}` | sender only, after a rejected frame; the socket stays open. A rejected edit also gets a `shape` frame with the row's current state. |
+
+## Key decisions
 
 - **Canvas row lock plus versions, not CRDT/OT.** It's simple to reason about and correct for 2-5 users. Text editing is single-op (the README puts collaborative text out of scope).
 - **Last writer wins on the geometry group.** Per-field merging was tried and proven to produce shapes nobody drew.
 - **Tombstones instead of row deletes**, so late updates can be recognized and undo-of-delete can restore the same id.
 - **Validation at the edge.** Every inbound WS frame goes through a Pydantic discriminated union (`server/app/ws_schemas.py`). That covers bounded finite coordinates, `#rrggbb` colors, text length, a whole geometry group, and no server-owned fields. A bad frame gets an error reply and the socket stays open.
-- **Few automated tests, aimed at races.** The four WS tests cover the handshake, bad frames, the concurrent drag vs. resize, and update-after-delete. Everything else was verified by hand (listed in DECISIONS.md).
+- **Few automated tests, aimed at races.** The four WS tests cover the handshake, bad frames, the concurrent drag vs. resize, and update-after-delete. Everything else was verified by hand.
+- **Two added dependencies only:** argon2-cffi (password hashing) and react-router-dom (routing). Nothing that does drawing, sync or undo. The theme is plain CSS variables in `client/src/styles.css`.
+
+## How it was verified
+
+- `pytest` (4 WS race/failure tests), `ruff check`, and `npm run build` (strict TypeScript).
+- Two browsers as two users for every requirement in the table above.
+- A final run on a fresh clone with an empty database: 5 scripted users on one canvas through the Vite proxy, firing at the same time. It covers 100 concurrent creates with retries (no duplicates), all 5 hammering one shape (every client ends equal to the DB row, geometry from exactly one sender), delete during 4 concurrent drags (rejected, never resurrected), restore, 12 kinds of malformed frames (one error each, socket kept, nothing persisted), cursor relay to the other 4 only, a dropped connection's `leave`, one user in two tabs, random mixed edits followed by a check that every client equals the DB and a fresh snapshot, and a server restart with the state intact. 26/26 checks passed on 3 consecutive runs, with no server errors logged.
 
 ## Known limitations
 
@@ -159,12 +184,12 @@ Full reasoning, alternatives and weaknesses are in [DECISIONS.md](DECISIONS.md).
 - **A rejected edit costs a quick reconnect** (the client resyncs from a snapshot). Rejections only happen on races like editing a just-deleted shape, or on a full canvas (2000 live shapes).
 - A client whose socket is slower than 2 s per send is dropped and reconnects.
 - Cursor positions are relative to the editor box. If the toolbar wraps to a different height in a very narrow window, remote cursors are offset.
-- **Signup isn't one transaction.** The user row and the first session are inserted separately. If the session insert fails, the account exists but the response is an error, and retrying says the username is taken (logging in works). Fix: one `conn.transaction()` around both.
+- If the backend is down when a page first loads, you land on the login page (which then shows the connection error) rather than a dedicated error screen.
 - Expired session rows aren't swept. Last writer wins means a concurrent drag simply loses to the later one, with no notification.
 
 ## Next steps
 
-1. Close sockets on logout and recheck session expiry per op (W13). Wrap signup in one transaction.
+1. Close sockets on logout and recheck session expiry per op (W13).
 2. A test that forces out-of-order broadcasts, to pin down C6.
 3. Postgres `LISTEN/NOTIFY` for multi-worker rooms.
 4. Server-side undo log, so history survives a refresh.
@@ -173,7 +198,7 @@ Full reasoning, alternatives and weaknesses are in [DECISIONS.md](DECISIONS.md).
 
 ## Code tour (suggested reading order)
 
-1. `PLAN.md`: the protocol and conflict rules everything else implements.
+1. "Sync and conflict model" and "WebSocket protocol" above: the rules everything else implements.
 2. `server/app/ws_schemas.py`: what a valid message is.
 3. `server/app/shapes.py`: one transaction per edit, locking, versions, tombstones.
 4. `server/app/ws.py`: handshake, room, snapshot, broadcast.

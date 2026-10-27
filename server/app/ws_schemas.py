@@ -1,4 +1,4 @@
-"""Validation schemas for WebSocket frames: the client->server half of the protocol in PLAN.md.
+"""Validation schemas for WebSocket frames: the client->server half of the protocol in README.md.
 
 Every inbound frame is parsed with `parse_client_message`. Invalid frames raise
 pydantic.ValidationError, which the WS handler turns into an error frame
@@ -69,13 +69,13 @@ ShapeProps = Annotated[BoxProps | TextProps | LineProps, Field(discriminator="ty
 shape_props_adapter: TypeAdapter[BoxProps | TextProps | LineProps] = TypeAdapter(ShapeProps)
 
 
-# Geometry fields are only ever written together, as one group (see PLAN.md).
+# Geometry fields are only ever written together, as one group (see README.md).
 BOX_GEOMETRY = frozenset({"x", "y", "width", "height"})
 LINE_GEOMETRY = frozenset({"x1", "y1", "x2", "y2"})
 
 
 class ShapePatch(_Strict):
-    """A partial update: geometry as one whole group, color and text per field (see PLAN.md).
+    """A partial update: geometry as one whole group, color and text per field (see README.md).
 
     `type` is deliberately absent, so a shape can't change kind. The server merges
     the patch onto the stored props and re-validates the result with

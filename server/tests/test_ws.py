@@ -1,4 +1,4 @@
-# WebSocket tests for the risky sync paths only (PLAN.md testing policy).
+# WebSocket tests for the risky sync paths only (see CLAUDE.md "Tests").
 # They use Starlette's TestClient as a context manager, so the app, its DB pool
 # and every socket share one event loop, and handlers for two sockets really
 # do interleave their transactions.
@@ -59,7 +59,7 @@ def _next(ws, kind: str) -> dict:
 
 
 def _apply(held: dict, frame: dict) -> None:
-    # The client rule from PLAN.md: ignore a shape frame whose version <= the one held.
+    # The client rule (README sync model): ignore a shape frame whose version <= the one held.
     current = held.get(frame["id"])
     if current is None or frame["version"] > current["version"]:
         held[frame["id"]] = frame

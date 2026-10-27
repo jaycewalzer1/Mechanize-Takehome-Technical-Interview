@@ -1,4 +1,4 @@
-// WebSocket protocol types (see PLAN.md). Mirrors server/app/ws_schemas.py;
+// WebSocket protocol types (see README "WebSocket protocol"). Mirrors server/app/ws_schemas.py;
 // keep the two in sync. Limits here are for UX only: the server enforces them.
 
 export const COORD_LIMIT = 10_000;

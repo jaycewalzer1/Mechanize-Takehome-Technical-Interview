@@ -1,7 +1,7 @@
 """The /ws endpoint: handshake auth, the in-memory room per canvas, and broadcast fan-out.
 
 Thin by design: it parses frames, calls `shapes.apply_op`, and broadcasts the result
-after commit. Protocol and rules: PLAN.md.
+after commit. Protocol and rules: README.md.
 """
 
 import asyncio

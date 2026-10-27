@@ -225,7 +225,7 @@ export default function Board({ shapes, onOp, onGesture, disabled }: Props) {
     const now = performance.now();
     if (next.moved && now - g.lastSent >= SEND_INTERVAL_MS) {
       // Full geometry group every time: the server replaces the group as a unit
-      // (PLAN.md conflict policy), so a partial patch would be rejected.
+      // (README conflict policy), so a partial patch would be rejected.
       onOp({ type: "update", id: g.id, patch: geom });
       next.lastSent = now;
     }

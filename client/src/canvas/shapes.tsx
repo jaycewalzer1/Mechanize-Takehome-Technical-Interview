@@ -9,7 +9,7 @@ export type Geometry = BoxGeometry | LineGeometry;
 const clamp = (v: number) => Math.max(-COORD_LIMIT, Math.min(COORD_LIMIT, v));
 
 // The full geometry group for a shape. Updates always send the whole group
-// (PLAN.md conflict policy), so this is the unit both sends and undo use.
+// (README conflict policy), so this is the unit both sends and undo use.
 export function geometryOf(p: ShapeProps): Geometry {
   return p.type === "line"
     ? { x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 }

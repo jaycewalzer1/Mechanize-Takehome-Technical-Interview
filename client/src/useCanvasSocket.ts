@@ -1,4 +1,4 @@
-// One WebSocket per open canvas (PLAN "Connection"): holds the server's shape
+// One WebSocket per open canvas (README "WebSocket protocol"): holds the server's shape
 // state plus my optimistic edits, reconnects with backoff, and hands cursor
 // frames to <Cursors> without touching shape state (P4).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,7 +28,7 @@ function applyFrame(state: State, f: ShapeFrame): State {
   return { ...state, byId: { ...state.byId, [f.id]: { props: f.props, version: f.version, deleted: f.deleted } } };
 }
 
-// Optimistic apply (PLAN client rules): props change now, `version` doesn't,
+// Optimistic apply (README "Sync and conflict model", point 7): props change now, `version` doesn't,
 // so the server's echo (always a higher version) still passes the filter and
 // replaces this with the committed state.
 // Edge case: W3 a rejected op is undone by reconnecting on `error` (see onmessage), not here.

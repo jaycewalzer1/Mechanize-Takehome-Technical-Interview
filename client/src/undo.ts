@@ -1,4 +1,4 @@
-// Per-user undo/redo (PLAN "Undo / redo"). Each entry is one of MY finished
+// Per-user undo/redo (README "Sync and conflict model", point 8). Each entry is one of MY finished
 // actions; undo and redo send an ordinary op, so it goes through server
 // validation, the canvas lock and the version filter like any other edit (U1).
 // LIMITATION: history is in memory only -> lost on refresh (U7); fix: keep each user's op log server-side.

@@ -13,7 +13,7 @@ C7. Lock order for multi-row ops (e.g. delete multiple, or anything touching can
 
 ## U: Undo / redo (multi-user)
 U1. Undo is per-user and only reverts **my own** operations. It is sent as a normal new operation (the inverse), so it goes through validation, locking, versioning, and broadcast like any edit.
-U2. Undo of my move on a shape someone else moved afterward → policy documented in DECISIONS.md (default: apply my inverse as a new LWW write). Behavior is deterministic and identical for all clients.
+U2. Undo of my move on a shape someone else moved afterward → policy documented in README.md (default: apply my inverse as a new LWW write). Behavior is deterministic and identical for all clients.
 U3. Undo of my create after someone else deleted that shape → no-op (the entry is skipped or dropped), no error popup, no resurrection beyond what U4 allows.
 U4. Undo of my delete → re-creates the shape with the same id and props. The DB must allow this (hard delete + re-insert, or `deleted_at` tombstone cleared).
 U5. A drag or resize produces **one** undo entry (start state → end state), not one per pointermove.

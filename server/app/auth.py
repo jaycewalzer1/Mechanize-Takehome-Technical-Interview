@@ -101,10 +101,13 @@ async def require_canvas_member(canvas_id: UUID, user: dict = Depends(current_us
         raise HTTPException(status_code=e.status, detail=e.detail) from None
 
 
-async def _start_session(response: Response, user_id) -> None:
+async def _start_session(
+    response: Response, user_id, conn: asyncpg.Connection | None = None
+) -> None:
+    # `conn` lets signup insert the session in the same transaction as the user row.
     token = secrets.token_urlsafe(32)
-    pool = await get_pool()
-    await pool.execute(
+    db = conn or await get_pool()
+    await db.execute(
         "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)",
         _hash_token(token),
         user_id,
@@ -149,20 +152,23 @@ async def signup(body: SignupBody, response: Response) -> dict:
     password_hash = await run_in_threadpool(_hasher.hash, body.password)
     pool = await get_pool()
     try:
-        row = await pool.fetchrow(
-            """
-            INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)
-            RETURNING id, username, email
-            """,
-            username,
-            email,
-            password_hash,
-        )
+        # Edge case: F1 one transaction for the user and its first session, so a
+        # failed session insert can't leave an account the user was told failed.
+        async with pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                """
+                INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)
+                RETURNING id, username, email
+                """,
+                username,
+                email,
+                password_hash,
+            )
+            await _start_session(response, row["id"], conn)
     except asyncpg.UniqueViolationError as e:
         # Edge case: C5 concurrent signups -> the case-insensitive unique index lets one win.
         field = "Email" if "email" in (e.constraint_name or "") else "Username"
         raise HTTPException(409, f"{field} is already taken") from None
-    await _start_session(response, row["id"])
     return public_user(row)
 
 

@@ -1,4 +1,4 @@
-"""Shape operations: every write to `shapes`, one transaction per op (PLAN.md "Server rules").
+"""Shape operations: every write to `shapes`, one transaction per op (README sync model).
 
 The WS handler calls `apply_op` and broadcasts what it returns, only after commit.
 """

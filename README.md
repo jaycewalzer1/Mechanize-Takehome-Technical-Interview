@@ -1,86 +1,85 @@
-# Mechanize Take-Home: Collaborative Whiteboard
+# Mechanize SWE interview: full breakdown
 
-Thank you for taking the time to interview with Mechanize! This repo contains your assignment for the final phase of our interview process, an open-ended take-home assignment.
+This is my Mechanize software engineer take-home. I passed the recruiter screen, did the 3-hour take-home and the 1-hour code review call, and didn't get through. This README covers the whole process: how it works, what they asked me, what I built, and what I'd study if I did it again.
 
-The take-home begins with a solo work block of three hours in which you can complete the task as described below.
-
-There is a 20-minute break after the solo block. During this time, our team will review your submission. If we'd like to move forward based on your progress, we'll talk to you on the follow-up call. If not, we'll cancel the follow-up calendar invite and send you an email cancelling the call.
-
-
-## Getting started
-
-1. **Clone this repo** (do _not_ fork it):
-   ```bash
-   git clone <this-repo-url>
-   cd <this-repo-name>
-   ```
-2. See `SETUP.md` for how to run the scaffold.
-3. Do all of your work on the **`main` branch**. Commit early and often.
-4. **Push your commits directly to `main`** — do not open a pull request.
-   ```bash
-   git push origin main
-   ```
-5. Your **final commit must be pushed no later than three hours** after your start time.
-   Anything pushed after the deadline will not be considered.
-
-## What you're building
-
-A real-time collaborative whiteboard. Multiple users, same canvas, editing together.
-
-## Deployment context
-
-This whiteboard is for synchronous design reviews, consisting of a small group (typically 2-5 people) on a call together, using the canvas as a shared scratchpad while they talk through a design. 
-- Each user has an account and can create canvases or be invited to others'. 
-- It's common for several people to be editing at once -- often the same objects -- as they try alternatives or work through a disagreement in real time. 
-- A typical session runs 30-90 minutes. 
-- Teams sometimes return to a canvas in a later session to recall what was decided.
-
-## Required features
-
-- User accounts (signup, login, logout)
-- Create a canvas, open an existing canvas
-- Invite other users to a canvas (by username or email -- a simple mechanism is fine)
-- Shapes: rectangle, ellipse, line, text
-- Select, move, resize, delete, change color
-- Undo / redo
-- See other users' cursors
-- Canvas state persists across sessions
-
-## Out of scope
-
-Don't spend time on these feature, as we won't evaluate them:
-
-- Collaborative text editing within text elements (treating a text update as a single operation is fine -- you don't need to handle two users typing in the same text box simultaneously)
-- Granular permissions (viewer/editor/owner roles, share-with-link, etc.)
-- Rich text editing, images, or file uploads
-- Canvas zoom, pan, or infinite canvas
-- Export (PNG, SVG, PDF)
-- Version history or named snapshots
-- Mobile or touch support
-
-## Provided scaffold
-
-This repository contains a minimal scaffold -- frontend, backend, and database wired together, but no whiteboard logic. You are free to restructure anything in the scaffold, but you are expected to stay within the provided stack; don't swap out the framework or database.
-
-## How we evaluate
-
-We evaluate whether your submission has a functional implementation of all required features above and is fit for the deployment context. Correctness and robustness for this use case and set of features matters more to us than other features beyond the required list, such as those listed as out of scope..
-
-## Use of libraries
-
-Don't pull in libraries that solve the core assignment for you (e.g. [tldraw](https://tldraw.dev/), [yjs](https://yjs.dev/)).
-
-The goal is to assess your engineering skills.
-
-## Use of AI
-
-Use whatever AI tools you like. We recommend that you use frontier AI coding models. We are not aware of a candidate who has performed exceptionally on this take-home without using AI. However, note that you will be expected to **fully understand and defend** your implementation during the call after the solo block.
+Order of this file:
+1. The process
+2. What they asked me
+3. The project
+4. What to study
+5. My submission docs (how it works, architecture, tradeoffs)
+6. The original assignment prompt, unchanged, at the very bottom
 
 ---
 
-# Submission
+## 1. The process
 
-Everything above this line is the original assignment, unchanged. Below: how to run the whiteboard, how it works, and what it doesn't do. The failure/concurrency contract the code is built against is [EDGE_CASES.md](EDGE_CASES.md).
+Mechanize builds RL environments and evals for training coding agents. Their engineering interview has three stages (they describe it publicly at mechanize.work/how-our-interview-process-works):
+
+1. **Recruiter screen (~30 min).** Background, why Mechanize, what you know about the company. Have a real answer for what they do.
+2. **Take-home (3 hrs) + code review call (1 hr).** You get a repo with a scaffold and a spec, build a full-stack web app solo in 3 hours, and push to `main`. They review it during a 20 minute break. If it's good enough, an engineer gets on a recorded call and grills you on the code. If not, they cancel the call.
+3. **Meet the team (30 min).** If you pass, they say an offer usually follows fast.
+
+Logistics people ask me about:
+- **AI is allowed and encouraged.** You use your own Claude Code (or whatever) account. They don't give you an API key.
+- When they say "use coding agents effectively," I think they mean running multiple Claude Code instances in parallel in your terminal. I guarantee that's what their engineers actually do on the job.
+- My stack was React + FastAPI + Postgres. You have to stay in the provided stack, and you can't pull in a library that solves the core problem (for my project: no tldraw, no yjs).
+
+## 2. What they asked me
+
+**The honest takeaway: if you put the spec into Claude it can probably one-shot it. Building it isn't the hard part. Explaining it is.**
+
+The call is not "walk me through your app." It's an engineer picking at the system you shipped:
+- **Hypotheticals.** "Two users drag the same shape at the same time. What does each client see? What ends up in the DB?" "User A deletes a shape while user B is mid-drag. What happens?" "Server restarts mid-session. What does the user see?"
+- **Line-by-line.** Open a file, explain what this line does and why it's there. Why this lock, why this order, what breaks if you remove it.
+- **Design tradeoffs.** Why last-writer-wins and not OT/CRDT? Why persist before broadcast? Why tombstones instead of deletes?
+- **Navigation.** Know where everything lives. I couldn't find one of my own routes on the call. Don't be me.
+
+For me the deepest questions were on **WebSockets and concurrency.** I needed help on most of the reviewer's questions, which is why I didn't pass. Your project will probably be different, so your hard topics will be too, but it'll be whatever the "real systems" part of your app is.
+
+## 3. The project
+
+Mine was a **real-time collaborative whiteboard**: accounts, canvases, invites, rect/ellipse/line/text, select/move/resize/delete/recolor, undo/redo, live cursors, persistence. The deployment context is the key part: 2-5 people on a design review call, often editing the same object at once. They grade correctness and robustness for that context, not extra features.
+
+Full original prompt is at the bottom of this file. Everything I built and why is in section 5.
+
+## 4. What to study
+
+You won't know your project until the take-home starts, so you can't study the exact app. Study the fundamentals any "React + FastAPI app that multiple people use at once" would hit:
+
+**Realtime and concurrency (this is where I got cooked)**
+- WebSockets end to end: handshake, auth on connect, rooms, broadcast fan-out, what happens when one socket is slow or dead, reconnect with backoff, resyncing from a snapshot
+- Race conditions: two writes to the same row at the same time, row locks (`SELECT ... FOR UPDATE`), versioning, out-of-order messages
+- Conflict strategies: last-writer-wins vs OT vs CRDT, and be able to say *why* you picked one
+- Persist-then-broadcast vs broadcast-then-persist, and what each one can break
+- Optimistic UI and how you roll it back when the server rejects you
+- Webhooks, idempotency keys, retries, and why duplicate requests shouldn't create duplicate rows
+
+**Backend**
+- Transactions: what's in one, what rolls back on failure
+- Auth: sessions vs JWT, cookies (httpOnly, same-origin), password hashing
+- Constraints as your safety net: UNIQUE, FK, CHECK, and mapping violations to clean 4xx errors
+- Input validation at the edge (Pydantic), never trusting client-sent ids
+- asyncio basics in FastAPI: what blocks the event loop
+
+**Frontend**
+- React state for live data: stale closures in socket handlers, effect cleanup, keys
+- Undo/redo when other people are editing the same thing (whose undo, what if they changed it after you)
+- Pointer events and drag handling
+
+**How I'd actually prep**
+1. Take this repo (or any similar take-home) and ask Claude to generate a list of similar projects they could give you.
+2. For each one, use the question types in section 2 to ask: "What would an engineer grill me on here? What do I need to know cold?"
+3. Do a timed 3-hour build of one. Then have Claude play the reviewer and hit you with hypotheticals about your own code for an hour, no peeking at the code with AI.
+4. Read your own code line by line before the call. All of it. Including the stuff the agent wrote that you didn't look at.
+
+Section 5 (my submission) plus [EDGE_CASES.md](EDGE_CASES.md) is basically a list of the exact things they can ask about for this project. Use it as a study guide.
+
+---
+
+# 5. My submission
+
+How to run the whiteboard, how it works, and what it doesn't do. The failure/concurrency contract the code is built against is [EDGE_CASES.md](EDGE_CASES.md).
 
 ## How to run
 
@@ -206,3 +205,87 @@ This is the part that matters most for the deployment context (2-5 people editin
 6. `client/src/useCanvasSocket.ts`: reconnect, snapshot, version filter, optimistic apply.
 7. `client/src/canvas/Board.tsx`: pointer handling, gestures, text editing.
 8. `client/src/undo.ts`, then `client/src/pages/CanvasPage.tsx`: how undo, cursors and the Board are wired together.
+
+---
+
+# 6. Original assignment prompt (unchanged)
+
+## Mechanize Take-Home: Collaborative Whiteboard
+
+Thank you for taking the time to interview with Mechanize! This repo contains your assignment for the final phase of our interview process, an open-ended take-home assignment.
+
+The take-home begins with a solo work block of three hours in which you can complete the task as described below.
+
+There is a 20-minute break after the solo block. During this time, our team will review your submission. If we'd like to move forward based on your progress, we'll talk to you on the follow-up call. If not, we'll cancel the follow-up calendar invite and send you an email cancelling the call.
+
+
+## Getting started
+
+1. **Clone this repo** (do _not_ fork it):
+   ```bash
+   git clone <this-repo-url>
+   cd <this-repo-name>
+   ```
+2. See `SETUP.md` for how to run the scaffold.
+3. Do all of your work on the **`main` branch**. Commit early and often.
+4. **Push your commits directly to `main`** — do not open a pull request.
+   ```bash
+   git push origin main
+   ```
+5. Your **final commit must be pushed no later than three hours** after your start time.
+   Anything pushed after the deadline will not be considered.
+
+## What you're building
+
+A real-time collaborative whiteboard. Multiple users, same canvas, editing together.
+
+## Deployment context
+
+This whiteboard is for synchronous design reviews, consisting of a small group (typically 2-5 people) on a call together, using the canvas as a shared scratchpad while they talk through a design. 
+- Each user has an account and can create canvases or be invited to others'. 
+- It's common for several people to be editing at once -- often the same objects -- as they try alternatives or work through a disagreement in real time. 
+- A typical session runs 30-90 minutes. 
+- Teams sometimes return to a canvas in a later session to recall what was decided.
+
+## Required features
+
+- User accounts (signup, login, logout)
+- Create a canvas, open an existing canvas
+- Invite other users to a canvas (by username or email -- a simple mechanism is fine)
+- Shapes: rectangle, ellipse, line, text
+- Select, move, resize, delete, change color
+- Undo / redo
+- See other users' cursors
+- Canvas state persists across sessions
+
+## Out of scope
+
+Don't spend time on these feature, as we won't evaluate them:
+
+- Collaborative text editing within text elements (treating a text update as a single operation is fine -- you don't need to handle two users typing in the same text box simultaneously)
+- Granular permissions (viewer/editor/owner roles, share-with-link, etc.)
+- Rich text editing, images, or file uploads
+- Canvas zoom, pan, or infinite canvas
+- Export (PNG, SVG, PDF)
+- Version history or named snapshots
+- Mobile or touch support
+
+## Provided scaffold
+
+This repository contains a minimal scaffold -- frontend, backend, and database wired together, but no whiteboard logic. You are free to restructure anything in the scaffold, but you are expected to stay within the provided stack; don't swap out the framework or database.
+
+## How we evaluate
+
+We evaluate whether your submission has a functional implementation of all required features above and is fit for the deployment context. Correctness and robustness for this use case and set of features matters more to us than other features beyond the required list, such as those listed as out of scope..
+
+## Use of libraries
+
+Don't pull in libraries that solve the core assignment for you (e.g. [tldraw](https://tldraw.dev/), [yjs](https://yjs.dev/)).
+
+The goal is to assess your engineering skills.
+
+## Use of AI
+
+Use whatever AI tools you like. We recommend that you use frontier AI coding models. We are not aware of a candidate who has performed exceptionally on this take-home without using AI. However, note that you will be expected to **fully understand and defend** your implementation during the call after the solo block.
+
+---
